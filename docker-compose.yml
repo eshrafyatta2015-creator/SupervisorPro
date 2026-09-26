@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: weekly_supervisor_sql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=SuperSecure@Password2026!
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    networks:
+      - wsp_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: weekly_supervisor_app
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=WeeklySupervisorProgramDb;User Id=sa;Password=SuperSecure@Password2026!;TrustServerCertificate=True;MultipleActiveResultSets=true;
+      - TZ=Asia/Hebron
+    ports:
+      - "5000:80"
+    depends_on:
+      - sqlserver
+    networks:
+      - wsp_network
+
+volumes:
+  sql_data:
+
+networks:
+  wsp_network:
+    driver: bridge
