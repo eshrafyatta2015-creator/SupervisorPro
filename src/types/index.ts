@@ -24,6 +24,7 @@ export interface User {
   role: UserRole;
   supervisorId?: string;
   isActive: boolean;
+  mustChangePassword?: boolean;
   failedLoginAttempts: number;
   lockoutEnd?: string; // ISO date
   lastLoginAt?: string;
@@ -54,6 +55,8 @@ export interface AcademicYear {
   createdAt: string;
 }
 
+export type PlanType = 'Planning' | 'Actual';
+
 export type WeekStatus = 'NotStarted' | 'Open' | 'Closed';
 
 export interface Week {
@@ -63,10 +66,13 @@ export interface Week {
   name: string; // e.g. 'الأسبوع الأول'
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
-  openSubmissionAt: string; // ISO timestamp
-  closeSubmissionAt: string; // ISO timestamp
-  allowEditAfterSubmit: boolean;
+  openSubmissionAt?: string; // ISO timestamp
+  closeSubmissionAt?: string; // ISO timestamp
+  allowEditAfterSubmit?: boolean;
   status: WeekStatus;
+  planningOpen: boolean; // مفتوح للإرسال للتخطيط
+  actualOpen: boolean; // مفتوح للإرسال للبرنامج الفعلي
+  isActive: boolean;
   notes?: string;
   createdAt: string;
 }
@@ -74,9 +80,10 @@ export interface Week {
 export interface School {
   id: string;
   name: string;
+  schoolCode?: string;
   region: string;
-  stage: 'أساسي' | 'ثانوي' | 'مختلط';
-  type: 'ذكور' | 'إناث' | 'مختلط';
+  stage?: 'أساسي' | 'ثانوي' | 'مختلط';
+  type?: 'ذكور' | 'إناث' | 'مختلط';
   isActive: boolean;
   notes?: string;
   createdAt: string;
@@ -85,26 +92,26 @@ export interface School {
 export interface Activity {
   id: string;
   name: string;
-  code: string;
+  code?: string;
   description?: string;
   isActive: boolean;
   color?: string;
   createdAt: string;
 }
 
-export type ProgramStatus = 'Draft' | 'Submitted' | 'UnderReview' | 'Approved' | 'NeedsRevision';
+export type ProgramStatus = 'Draft' | 'Submitted' | 'UnderReview' | 'Approved' | 'NeedsRevision' | 'Closed';
 
 export interface ProgramItem {
   id: string;
   weeklyProgramId: string;
-  dayDate: string; // YYYY-MM-DD
-  dayName: string; // 'الأحد', 'الإثنين', etc.
   schoolId: string;
   activityId: string;
-  startTime: string; // '08:00'
-  endTime: string; // '10:00'
-  location: string;
-  objective: string;
+  dayDate?: string; // YYYY-MM-DD (optional)
+  dayName?: string; // 'الأحد', 'الإثنين', etc. (optional)
+  startTime?: string; // optional
+  endTime?: string; // optional
+  location?: string;
+  objective?: string;
   notes?: string;
   sortOrder: number;
   createdAt: string;
@@ -116,6 +123,7 @@ export interface WeeklyProgram {
   supervisorId: string;
   academicYearId: string;
   weekId: string;
+  planType: PlanType; // 'Planning' | 'Actual'
   status: ProgramStatus;
   submittedAt?: string;
   reviewedAt?: string;
@@ -158,6 +166,7 @@ export interface SystemSettings {
   sessionTimeoutMinutes: number;
   notificationEmail?: string;
   autoBackupEnabled: boolean;
+  forceChangePasswordOnFirstLogin?: boolean;
   updatedAt: string;
 }
 

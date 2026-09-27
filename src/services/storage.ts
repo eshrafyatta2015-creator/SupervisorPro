@@ -11,7 +11,9 @@ import {
   Notification,
   SystemSettings,
   AuditLog,
-  Permission
+  Permission,
+  ProgramStatus,
+  PlanType
 } from '../types';
 import { hashPassword } from '../utils/crypto';
 
@@ -70,17 +72,17 @@ class StorageService {
 
   // --- Initialization & Seeding ---
   public async initializeDatabase(): Promise<void> {
-    const initialized = localStorage.getItem('wsp_initialized');
-    if (initialized) return;
+    const initializedVersion = localStorage.getItem('wsp_version_sep_v1');
+    if (initializedVersion === '1') return;
 
-    console.log('Seeding initial database for WeeklySupervisorProgram...');
+    console.log('Seeding initial database for WeeklySupervisorProgram with separated roles...');
 
     // 1. Password Hashes store
     const passwordHashes: Record<string, string> = {};
-    const defaultPassword = 'Admin@123456';
-    const supervisorPassword = 'User@123456';
-    const adminHash = await hashPassword(defaultPassword);
-    const supHash = await hashPassword(supervisorPassword);
+    const defaultAdminPassword = 'admin123';
+    const defaultSupervisorPassword = '123456';
+    const adminHash = await hashPassword(defaultAdminPassword);
+    const supHash = await hashPassword(defaultSupervisorPassword);
 
     passwordHashes['admin'] = adminHash;
 
@@ -97,6 +99,7 @@ class StorageService {
       sessionTimeoutMinutes: 60,
       notificationEmail: 'eshrafyatta2015@gmail.com',
       autoBackupEnabled: true,
+      forceChangePasswordOnFirstLogin: true,
       updatedAt: new Date().toISOString()
     };
     this.set(STORAGE_KEYS.SYSTEM_SETTINGS, defaultSettings);
@@ -141,6 +144,9 @@ class StorageService {
         closeSubmissionAt: closeDate,
         allowEditAfterSubmit: false,
         status: 'Open',
+        planningOpen: true,
+        actualOpen: false,
+        isActive: true,
         notes: 'الأسبوع التدريبي والإشرافي الأول للفصل الدراسي الأول',
         createdAt: new Date().toISOString()
       },
@@ -155,6 +161,9 @@ class StorageService {
         closeSubmissionAt: new Date(now.getTime() + 10 * 24 * 3600 * 1000).toISOString(),
         allowEditAfterSubmit: false,
         status: 'NotStarted',
+        planningOpen: false,
+        actualOpen: false,
+        isActive: false,
         notes: 'متابعة الخطط الإشرافية الميدانية في مدارس يطا',
         createdAt: new Date().toISOString()
       }
@@ -192,28 +201,31 @@ class StorageService {
     ];
     this.set(STORAGE_KEYS.SCHOOLS, schools);
 
-    // 7. Supervisors & Linked Users (10 Real Supervisors for Yatta Directorate)
+    // 7. Supervisors & Linked Users (Active Supervisors in Yatta Directorate)
     const rawSupervisors = [
-      { name: 'د. أحمد خليل النجار', username: 'ahmad.najjar', nationalId: '984512301', spec: 'الرياضيات', dept: 'الإشراف التربوي - العلوم والرياضيات', phone: '0599123451', email: 'a.najjar@moe.edu.ps' },
-      { name: 'أ. فاطمة إبراهيم خليل', username: 'fatima.khalil', nationalId: '984512302', spec: 'اللغة العربية', dept: 'الإشراف التربوي - الإنسانيات', phone: '0599123452', email: 'f.khalil@moe.edu.ps' },
-      { name: 'أ. محمود عبد الرحمن الهريني', username: 'mahmoud.horeini', nationalId: '984512303', spec: 'اللغة الإنجليزية', dept: 'الإشراف التربوي - اللغات', phone: '0599123453', email: 'm.horeini@moe.edu.ps' },
-      { name: 'أ. مريم يوسف أبو عرام', username: 'maryam.aram', nationalId: '984512304', spec: 'العلوم العامة والفيزياء', dept: 'الإشراف التربوي - العلوم', phone: '0599123454', email: 'm.aram@moe.edu.ps' },
-      { name: 'أ. يوسف إسماعيل الشواهين', username: 'yousef.shawahin', nationalId: '984512305', spec: 'الاجتماعيات والتاريخ', dept: 'الإشراف التربوي - الإنسانيات', phone: '0599123455', email: 'y.shawahin@moe.edu.ps' },
-      { name: 'أ. خديجة عيسى بحيص', username: 'khadija.bheis', nationalId: '984512306', spec: 'التربية الإسلامية', dept: 'الإشراف التربوي - الإنسانيات', phone: '0599123456', email: 'k.bheis@moe.edu.ps' },
-      { name: 'أ. إبراهيم محمد الجبارين', username: 'ibrahim.jabareen', nationalId: '984512307', spec: 'تكنولوجيا المعلومات والحاسوب', dept: 'الإشراف التربوي - التكنولوجيا', phone: '0599123457', email: 'i.jabareen@moe.edu.ps' },
-      { name: 'أ. سناء صالح مخامرة', username: 'sanaa.makhamreh', nationalId: '984512308', spec: 'التربية الخاصة وصعوبات التعلم', dept: 'الإشراف التربوي - الإرشاد والتأهيل', phone: '0599123458', email: 's.makhamreh@moe.edu.ps' },
-      { name: 'أ. عمر موسى الهدار', username: 'omar.haddar', nationalId: '984512309', spec: 'المرحلة الأساسية الدنيا', dept: 'الإشراف التربوي - المرحلة الأساسية', phone: '0599123459', email: 'o.haddar@moe.edu.ps' },
-      { name: 'أ. رانية داود العمور', username: 'rania.ammour', nationalId: '984512310', spec: 'الصحة المدرسية والأنشطة', dept: 'الإشراف والتأهيل التربوي', phone: '0599123460', email: 'r.ammour@moe.edu.ps' }
+      { name: 'أحمد محمد', username: 'ahmad', nationalId: '984512301', spec: 'الرياضيات', dept: 'الإشراف التربوي - العلوم والرياضيات', phone: '0599123451', email: 'ahmad@moe.edu.ps' },
+      { name: 'محمد علي', username: 'mohammad', nationalId: '984512302', spec: 'اللغة العربية', dept: 'الإشراف التربوي - اللغات', phone: '0599123452', email: 'mohammad@moe.edu.ps' },
+      { name: 'خالد أحمد', username: 'khaled', nationalId: '984512303', spec: 'العلوم العامة والفيزياء', dept: 'الإشراف التربوي - العلوم', phone: '0599123453', email: 'khaled@moe.edu.ps' },
+      { name: 'يوسف حسن', username: 'yousef', nationalId: '984512304', spec: 'اللغة الإنجليزية', dept: 'الإشراف التربوي - اللغات', phone: '0599123454', email: 'yousef@moe.edu.ps' },
+      { name: 'فاطمة إبراهيم', username: 'fatima', nationalId: '984512305', spec: 'المرحلة الأساسية الأولى', dept: 'الإشراف التربوي - المرحلة الأساسية', phone: '0599123455', email: 'fatima@moe.edu.ps' },
+      { name: 'مريم يوسف', username: 'maryam', nationalId: '984512306', spec: 'التربية الإسلامية', dept: 'الإشراف التربوي - الإنسانيات', phone: '0599123456', email: 'maryam@moe.edu.ps' },
+      { name: 'محمود عبد الرحمن', username: 'mahmoud', nationalId: '984512307', spec: 'الاجتماعيات والجغرافيا', dept: 'الإشراف التربوي - الإنسانيات', phone: '0599123457', email: 'mahmoud@moe.edu.ps' },
+      { name: 'إبراهيم محمد', username: 'ibrahim', nationalId: '984512308', spec: 'تكنولوجيا المعلومات والحاسوب', dept: 'الإشراف التربوي - التكنولوجيا', phone: '0599123458', email: 'ibrahim@moe.edu.ps' },
+      { name: 'سناء صالح', username: 'sanaa', nationalId: '984512309', spec: 'التربية الخاصة وصعوبات التعلم', dept: 'الإشراف التربوي - الإرشاد والتأهيل', phone: '0599123459', email: 'sanaa@moe.edu.ps' },
+      { name: 'عمر موسى', username: 'omar', nationalId: '984512310', spec: 'الصحة المدرسية والأنشطة', dept: 'الإشراف والتأهيل التربوي', phone: '0599123460', email: 'omar@moe.edu.ps' }
     ];
 
+    // Administrator user (SupervisorId is strictly undefined / NULL)
     const users: User[] = [
       {
         id: 'usr_admin',
         username: 'admin',
-        fullName: 'مدير قسم الإشراف - يطا',
+        fullName: 'مسؤول النظام',
         email: 'admin.eshraf@moe.edu.ps',
         role: 'Administrator',
+        supervisorId: undefined,
         isActive: true,
+        mustChangePassword: false,
         failedLoginAttempts: 0,
         createdAt: now.toISOString(),
         permissions: ALL_PERMISSIONS
@@ -235,6 +247,7 @@ class StorageService {
         role: 'Supervisor',
         supervisorId: supId,
         isActive: true,
+        mustChangePassword: true,
         failedLoginAttempts: 0,
         createdAt: now.toISOString(),
         permissions: ['ViewDashboard', 'ViewPrograms']
@@ -269,6 +282,7 @@ class StorageService {
       supervisorId: 'sup_1',
       academicYearId: 'year_2026_2027',
       weekId: 'week_1',
+      planType: 'Planning',
       status: 'Approved',
       submittedAt: new Date(now.getTime() - 48 * 3600 * 1000).toISOString(),
       reviewedAt: new Date(now.getTime() - 24 * 3600 * 1000).toISOString(),
@@ -342,6 +356,7 @@ class StorageService {
       supervisorId: 'sup_2',
       academicYearId: 'year_2026_2027',
       weekId: 'week_1',
+      planType: 'Planning',
       status: 'Submitted',
       submittedAt: new Date(now.getTime() - 12 * 3600 * 1000).toISOString(),
       createdAt: new Date(now.getTime() - 30 * 3600 * 1000).toISOString()
@@ -386,6 +401,7 @@ class StorageService {
       supervisorId: 'sup_3',
       academicYearId: 'year_2026_2027',
       weekId: 'week_1',
+      planType: 'Planning',
       status: 'NeedsRevision',
       submittedAt: new Date(now.getTime() - 18 * 3600 * 1000).toISOString(),
       reviewedAt: new Date(now.getTime() - 6 * 3600 * 1000).toISOString(),
@@ -426,6 +442,7 @@ class StorageService {
       supervisorId: 'sup_4',
       academicYearId: 'year_2026_2027',
       weekId: 'week_1',
+      planType: 'Planning',
       status: 'Draft',
       createdAt: new Date(now.getTime() - 10 * 3600 * 1000).toISOString()
     });
@@ -535,6 +552,7 @@ class StorageService {
     this.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
 
     localStorage.setItem('wsp_initialized', 'true');
+    localStorage.setItem('wsp_version_sep_v1', '1');
   }
 
   // --- Auth & Session ---
@@ -542,18 +560,51 @@ class StorageService {
     return this.get<User | null>(STORAGE_KEYS.SESSION, null);
   }
 
-  public async login(username: string, passwordPlain: string): Promise<{ success: boolean; user?: User; error?: string }> {
+  public getActiveSupervisorsForLogin(): { user: User; supervisor: Supervisor }[] {
+    const supervisors = this.getSupervisors().filter(s => s.status === 'Active');
+    const users = this.getUsers().filter(u => u.isActive && u.role === 'Supervisor');
+    const result: { user: User; supervisor: Supervisor }[] = [];
+
+    for (const sup of supervisors) {
+      const u = users.find(user => user.supervisorId === sup.id || user.id === sup.userId);
+      if (u) {
+        result.push({ user: u, supervisor: sup });
+      }
+    }
+    return result.sort((a, b) => a.supervisor.name.localeCompare(b.supervisor.name, 'ar'));
+  }
+
+  public async login(
+    identifier: string,
+    passwordPlain: string
+  ): Promise<{ success: boolean; user?: User; error?: string }> {
     const users = this.get<User[]>(STORAGE_KEYS.USERS, []);
     const hashes = this.get<Record<string, string>>(STORAGE_KEYS.PASSWORD_HASHES, {});
 
-    const user = users.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
+    const cleanId = identifier.trim().toLowerCase();
+    const user = users.find(u =>
+      u.id === identifier ||
+      u.username.toLowerCase() === cleanId ||
+      u.fullName.toLowerCase() === identifier.trim().toLowerCase()
+    );
+
+    const clientIp = '192.168.1.' + Math.floor(Math.random() * 40 + 10);
+    const nowStr = new Date().toLocaleString('ar-PS', { dateStyle: 'short', timeStyle: 'short' });
+
     if (!user) {
-      this.addAuditLog('SYSTEM', 'GUEST', 'محاولة تسجيل دخول فاشلة', 'Auth', undefined, `اسم مستخدم غير موجود: ${username}`);
+      this.addAuditLog('SYSTEM', cleanId || 'GUEST', 'محاولة تسجيل دخول فاشلة', 'Auth', undefined, `${cleanId || identifier} | ${nowStr} | IP: ${clientIp} | Failure: اسم المستخدم أو المشرف غير مسجل بالنظام`);
       return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة.' };
+    }
+
+    // Role strict check: Admin is never linked to a supervisor
+    if (user.role === 'Administrator' && user.supervisorId) {
+      user.supervisorId = undefined;
+      this.saveUser(user);
     }
 
     // Check account active
     if (!user.isActive) {
+      this.addAuditLog(user.id, user.username, 'محاولة دخول لحساب معطل', 'Auth', user.id, `${user.username} | ${nowStr} | IP: ${clientIp} | Failure: الحساب معطل إدارياً`);
       return { success: false, error: 'تم تعطيل هذا الحساب. يرجى مراجعة مسؤول النظام في المديرية.' };
     }
 
@@ -567,15 +618,16 @@ class StorageService {
     const storedHash = hashes[user.username];
     const computedHash = await hashPassword(passwordPlain);
 
-    if (storedHash !== computedHash) {
+    if (!storedHash || storedHash !== computedHash) {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
       if (user.failedLoginAttempts >= 5) {
         user.lockoutEnd = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins lock
         this.saveUser(user);
-        this.addAuditLog(user.id, user.username, 'إقفال حساب', 'Auth', user.id, 'تم إقفال الحساب لتجاوز 5 محاولات فاشلة.');
+        this.addAuditLog(user.id, user.username, 'إقفال حساب', 'Auth', user.id, `${user.username} | ${nowStr} | IP: ${clientIp} | Failure: تجاوز 5 محاولات فاشلة`);
         return { success: false, error: 'تم إقفال الحساب لمدة 15 دقيقة بسبب تكرار المحاولات الفاشلة.' };
       }
       this.saveUser(user);
+      this.addAuditLog(user.id, user.username, 'فشل التحقق من كلمة المرور', 'Auth', user.id, `${user.username} | ${nowStr} | IP: ${clientIp} | Failure: كلمة المرور غير صحيحة (المحاولة ${user.failedLoginAttempts}/5)`);
       return { success: false, error: `كلمة المرور غير صحيحة. محاولات متبقية: ${5 - user.failedLoginAttempts}` };
     }
 
@@ -586,8 +638,28 @@ class StorageService {
     this.saveUser(user);
     this.set(STORAGE_KEYS.SESSION, user);
 
-    this.addAuditLog(user.id, user.username, 'تسجيل دخول ناجح', 'Auth', user.id, `تسجيل دخول للدور: ${user.role}`);
+    // Audit log matching the exact user specification: UserId, LoginDate, IP, Success
+    this.addAuditLog(user.id, user.username, 'تسجيل دخول ناجح', 'Auth', user.id, `${user.username} | ${nowStr} | IP: ${clientIp} | Success | Role: ${user.role}`);
     return { success: true, user };
+  }
+
+  public async completeFirstLoginPasswordChange(userId: string, newPasswordPlain: string): Promise<{ success: boolean; error?: string }> {
+    const user = this.getUserById(userId);
+    if (!user) return { success: false, error: 'المستخدم غير موجود.' };
+
+    if (newPasswordPlain.length < 6) {
+      return { success: false, error: 'يجب ألا تقل كلمة المرور الجديدة عن 6 خانات.' };
+    }
+
+    const hashes = this.get<Record<string, string>>(STORAGE_KEYS.PASSWORD_HASHES, {});
+    hashes[user.username] = await hashPassword(newPasswordPlain);
+    this.set(STORAGE_KEYS.PASSWORD_HASHES, hashes);
+
+    user.mustChangePassword = false;
+    this.saveUser(user);
+
+    this.addAuditLog(user.id, user.username, 'تغيير كلمة المرور الأولية', 'User', user.id, `قام ${user.fullName} بتغيير كلمة المرور الابتدائية عند أول تسجيل دخول.`);
+    return { success: true };
   }
 
   public logout(): void {
@@ -839,17 +911,347 @@ class StorageService {
     return this.get<WeeklyProgram[]>(STORAGE_KEYS.WEEKLY_PROGRAMS, []);
   }
 
+  public getProgramsForUser(currentUser: User): WeeklyProgram[] {
+    const all = this.getWeeklyPrograms();
+    if (currentUser.role === 'Supervisor') {
+      return all.filter(p => p.supervisorId === currentUser.supervisorId);
+    }
+    return all;
+  }
+
   public getProgramById(id: string): WeeklyProgram | undefined {
     return this.getWeeklyPrograms().find(p => p.id === id);
   }
 
-  public getProgramBySupervisorAndWeek(supervisorId: string, weekId: string): WeeklyProgram | undefined {
-    return this.getWeeklyPrograms().find(p => p.supervisorId === supervisorId && p.weekId === weekId);
+  public getProgramByIdForUser(id: string, currentUser: User): WeeklyProgram | null {
+    const prog = this.getProgramById(id);
+    if (!prog) return null;
+    if (currentUser.role === 'Supervisor' && prog.supervisorId !== currentUser.supervisorId) {
+      // 403 Forbidden: Supervisor cannot access other supervisors' programs
+      return null;
+    }
+    return prog;
+  }
+
+  public getIncomingPrograms(): {
+    id: string;
+    supervisorId: string;
+    supervisorName: string;
+    academicYearName: string;
+    weekId: string;
+    weekNumber: number;
+    weekName: string;
+    submittedAt?: string;
+    status: ProgramStatus;
+    itemsCount: number;
+    reviewNotes?: string;
+    program: WeeklyProgram;
+  }[] {
+    const programs = this.getWeeklyPrograms();
+    const supervisors = this.getSupervisors();
+    const weeks = this.getWeeks();
+    const years = this.getAcademicYears();
+    const items = this.get<ProgramItem[]>(STORAGE_KEYS.PROGRAM_ITEMS, []);
+
+    // Filter incoming programs: submitted, under review, needs revision, approved, closed
+    return programs
+      .filter(p => p.status === 'Submitted' || p.status === 'UnderReview' || p.status === 'NeedsRevision' || p.status === 'Approved' || p.status === 'Closed')
+      .map(p => {
+        const sup = supervisors.find(s => s.id === p.supervisorId);
+        const week = weeks.find(w => w.id === p.weekId);
+        const year = years.find(y => y.id === p.academicYearId);
+        const pItems = items.filter(i => i.weeklyProgramId === p.id);
+
+        return {
+          id: p.id,
+          supervisorId: p.supervisorId,
+          supervisorName: sup?.name || 'مشرف غير معروف',
+          academicYearName: year?.name || '2026-2027',
+          weekId: p.weekId,
+          weekNumber: week?.weekNumber || 1,
+          weekName: week?.name || `الأسبوع ${week?.weekNumber || 1}`,
+          submittedAt: p.submittedAt,
+          status: p.status,
+          itemsCount: pItems.length,
+          reviewNotes: p.reviewNotes,
+          program: p
+        };
+      })
+      .sort((a, b) => {
+        const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+        const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+  }
+
+  public submitWeeklyProgram(programId: string, currentUser: User): { success: boolean; error?: string } {
+    const program = this.getProgramById(programId);
+    if (!program) return { success: false, error: 'البرنامج غير موجود.' };
+
+    if (currentUser.role === 'Supervisor' && program.supervisorId !== currentUser.supervisorId) {
+      return { success: false, error: 'غير مصرح لك بإرسال برنامج مشرف آخر.' };
+    }
+
+    const items = this.getProgramItems(program.id);
+    if (items.length === 0) {
+      return { success: false, error: 'لا يمكن إرسال برنامج أسبوعي فارغ بدون أنشطة.' };
+    }
+
+    const now = new Date().toISOString();
+    program.status = 'Submitted';
+    program.submittedAt = now;
+    program.updatedAt = now;
+    this.saveProgram(program);
+
+    const sup = this.getSupervisorById(program.supervisorId);
+    const supName = sup?.name || currentUser.fullName;
+
+    // Dispatches notification to admin according to exact prompt requirement:
+    // "تم استلام برنامج أسبوعي جديد من المشرف أحمد محمد."
+    this.addNotification({
+      id: `notif_${Date.now()}`,
+      userId: 'usr_admin',
+      title: 'برنامج أسبوعي جديد وارد',
+      message: `تم استلام برنامج أسبوعي جديد من المشرف ${supName}.`,
+      type: 'info',
+      isRead: false,
+      createdAt: now
+    });
+
+    this.addAuditLog(
+      currentUser.id,
+      currentUser.username,
+      'إرسال برنامج أسبوعي',
+      'WeeklyProgram',
+      program.id,
+      `تم إرسال البرنامج الأسبوعي من المشرف ${supName} بنجاح (${items.length} نشاط)`
+    );
+
+    return { success: true };
+  }
+
+  public getProgramBySupervisorAndWeek(supervisorId: string, weekId: string, planType: PlanType = 'Planning'): WeeklyProgram | undefined {
+    return this.getWeeklyPrograms().find(p => p.supervisorId === supervisorId && p.weekId === weekId && (p.planType || 'Planning') === planType);
   }
 
   public getProgramItems(programId: string): ProgramItem[] {
     const all = this.get<ProgramItem[]>(STORAGE_KEYS.PROGRAM_ITEMS, []);
-    return all.filter(i => i.weeklyProgramId === programId).sort((a, b) => a.dayDate.localeCompare(b.dayDate) || a.startTime.localeCompare(b.startTime));
+    return all
+      .filter(i => i.weeklyProgramId === programId)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+
+  // --- Dual-Lifecycle Week Controls (Planning vs Actual) ---
+  public togglePlanningOpen(weekId: string, open: boolean): void {
+    const week = this.getWeekById(weekId);
+    if (!week) return;
+    week.planningOpen = open;
+    this.saveWeek(week);
+    this.addAuditLog(
+      'ADMIN',
+      'admin',
+      open ? 'فتح إرسال برنامج التخطيط' : 'إغلاق إرسال برنامج التخطيط',
+      'Week',
+      week.id,
+      `${open ? 'تم فتح' : 'تم إغلاق'} فترة إرسال برنامج التخطيط للأسبوع: ${week.name}`
+    );
+  }
+
+  public toggleActualOpen(weekId: string, open: boolean): void {
+    const week = this.getWeekById(weekId);
+    if (!week) return;
+    week.actualOpen = open;
+    this.saveWeek(week);
+    this.addAuditLog(
+      'ADMIN',
+      'admin',
+      open ? 'فتح إرسال البرنامج الفعلي' : 'إغلاق إرسال البرنامج الفعلي',
+      'Week',
+      week.id,
+      `${open ? 'تم فتح' : 'تم إغلاق'} فترة إرسال البرنامج الفعلي للأسبوع: ${week.name}`
+    );
+  }
+
+  public reopenProgram(programId: string, adminUser: User): { success: boolean; error?: string } {
+    const program = this.getProgramById(programId);
+    if (!program) return { success: false, error: 'البرنامج غير موجود.' };
+
+    program.status = 'Draft';
+    program.submittedAt = undefined;
+    program.reviewedAt = undefined;
+    this.saveProgram(program);
+
+    const sup = this.getSupervisorById(program.supervisorId);
+    const week = this.getWeekById(program.weekId);
+
+    if (sup) {
+      this.addNotification({
+        id: `notif_${Date.now()}`,
+        userId: sup.userId,
+        title: 'إعادة فتح البرنامج للتعديل',
+        message: `قام مسؤول النظام بإعادة فتح ${program.planType === 'Planning' ? 'برنامج التخطيط' : 'البرنامج الفعلي'} لـ (${week?.name || 'الأسبوع'}) لتتمكن من التعديل وإعادة الإرسال.`,
+        type: 'info',
+        isRead: false,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    this.addAuditLog(
+      adminUser.id,
+      adminUser.username,
+      'إعادة فتح برنامج لمشرف',
+      'WeeklyProgram',
+      program.id,
+      `تمت إعادة فتح ${program.planType === 'Planning' ? 'برنامج التخطيط' : 'البرنامج الفعلي'} للمشرف ${sup?.name || ''} للأسبوع ${week?.name || ''}`
+    );
+
+    return { success: true };
+  }
+
+  public getComplianceReport(targetWeekId?: string): {
+    week: Week | undefined;
+    totalSupervisors: number;
+    planningSubmittedCount: number;
+    planningUnsubmittedCount: number;
+    actualSubmittedCount: number;
+    actualUnsubmittedCount: number;
+    planningRate: number;
+    actualRate: number;
+    rows: {
+      supervisorId: string;
+      supervisorName: string;
+      username: string;
+      specialization: string;
+      planningSubmitted: boolean;
+      planningStatus: ProgramStatus;
+      planningSubmittedAt?: string;
+      actualSubmitted: boolean;
+      actualStatus: ProgramStatus;
+      actualSubmittedAt?: string;
+      planningItemsCount: number;
+      actualItemsCount: number;
+    }[];
+  } {
+    const activeWeek = targetWeekId ? this.getWeekById(targetWeekId) : this.getCurrentWeek();
+    const supervisors = this.getSupervisors().filter(s => s.status === 'Active');
+    const allPrograms = this.getWeeklyPrograms();
+    const allItems = this.get<ProgramItem[]>(STORAGE_KEYS.PROGRAM_ITEMS, []);
+    const users = this.getUsers();
+
+    if (!activeWeek) {
+      return {
+        week: undefined,
+        totalSupervisors: supervisors.length,
+        planningSubmittedCount: 0,
+        planningUnsubmittedCount: supervisors.length,
+        actualSubmittedCount: 0,
+        actualUnsubmittedCount: supervisors.length,
+        planningRate: 0,
+        actualRate: 0,
+        rows: []
+      };
+    }
+
+    const weekPrograms = allPrograms.filter(p => p.weekId === activeWeek.id);
+
+    const rows = supervisors.map(sup => {
+      const u = users.find(x => x.id === sup.userId);
+      const planProg = weekPrograms.find(p => p.supervisorId === sup.id && (p.planType || 'Planning') === 'Planning');
+      const actProg = weekPrograms.find(p => p.supervisorId === sup.id && p.planType === 'Actual');
+
+      const planItems = planProg ? allItems.filter(i => i.weeklyProgramId === planProg.id) : [];
+      const actItems = actProg ? allItems.filter(i => i.weeklyProgramId === actProg.id) : [];
+
+      const isPlanSubmitted = planProg ? (planProg.status === 'Submitted' || planProg.status === 'Approved' || planProg.status === 'UnderReview' || planProg.status === 'NeedsRevision') : false;
+      const isActSubmitted = actProg ? (actProg.status === 'Submitted' || actProg.status === 'Approved' || actProg.status === 'UnderReview') : false;
+
+      return {
+        supervisorId: sup.id,
+        supervisorName: sup.name,
+        username: u?.username || '',
+        specialization: sup.specialization,
+        planningSubmitted: isPlanSubmitted,
+        planningStatus: planProg?.status || 'Draft',
+        planningSubmittedAt: planProg?.submittedAt,
+        actualSubmitted: isActSubmitted,
+        actualStatus: actProg?.status || 'Draft',
+        actualSubmittedAt: actProg?.submittedAt,
+        planningItemsCount: planItems.length,
+        actualItemsCount: actItems.length
+      };
+    });
+
+    const planningSubmittedCount = rows.filter(r => r.planningSubmitted).length;
+    const actualSubmittedCount = rows.filter(r => r.actualSubmitted).length;
+
+    return {
+      week: activeWeek,
+      totalSupervisors: supervisors.length,
+      planningSubmittedCount,
+      planningUnsubmittedCount: Math.max(0, supervisors.length - planningSubmittedCount),
+      actualSubmittedCount,
+      actualUnsubmittedCount: Math.max(0, supervisors.length - actualSubmittedCount),
+      planningRate: supervisors.length > 0 ? Math.round((planningSubmittedCount / supervisors.length) * 100) : 0,
+      actualRate: supervisors.length > 0 ? Math.round((actualSubmittedCount / supervisors.length) * 100) : 0,
+      rows
+    };
+  }
+
+  public getSupervisorDetailedComparison(supervisorId: string, weekId: string) {
+    const supervisor = this.getSupervisorById(supervisorId);
+    const week = this.getWeekById(weekId);
+    const schools = this.getSchools();
+    const activities = this.getActivities();
+
+    const planProg = this.getProgramBySupervisorAndWeek(supervisorId, weekId, 'Planning');
+    const actProg = this.getProgramBySupervisorAndWeek(supervisorId, weekId, 'Actual');
+
+    const planItems = planProg ? this.getProgramItems(planProg.id) : [];
+    const actItems = actProg ? this.getProgramItems(actProg.id) : [];
+
+    const formatItems = (items: ProgramItem[]) =>
+      items.map(i => ({
+        id: i.id,
+        schoolName: schools.find(s => s.id === i.schoolId)?.name || 'مدرسة غير محددة',
+        activityName: activities.find(a => a.id === i.activityId)?.name || 'فعالية غير محددة',
+        dayName: i.dayName,
+        notes: i.notes
+      }));
+
+    return {
+      supervisor,
+      week,
+      planningProgram: planProg,
+      planningItems: formatItems(planItems),
+      actualProgram: actProg,
+      actualItems: formatItems(actItems)
+    };
+  }
+
+  public validateWeekDates(startDate: string, endDate: string, excludeWeekId?: string): { valid: boolean; error?: string } {
+    if (!startDate || !endDate) {
+      return { valid: false, error: 'يرجى تحديد تاريخ البداية وتاريخ النهاية للأسبوع.' };
+    }
+
+    const start = new Date(startDate).getTime();
+    const end = new Date(endDate).getTime();
+
+    if (end < start) {
+      return { valid: false, error: 'تاريخ نهاية الأسبوع لا يمكن أن يكون قبل تاريخ البداية.' };
+    }
+
+    const weeks = this.getWeeks().filter(w => w.id !== excludeWeekId);
+    for (const w of weeks) {
+      const wStart = new Date(w.startDate).getTime();
+      const wEnd = new Date(w.endDate).getTime();
+
+      // Check overlap
+      if ((start >= wStart && start <= wEnd) || (end >= wStart && end <= wEnd) || (start <= wStart && end >= wEnd)) {
+        return { valid: false, error: `تاريخ الأسبوع الجديد يتداخل مع أسبوع موجود مسبقاً (${w.name}: من ${w.startDate} إلى ${w.endDate}).` };
+      }
+    }
+
+    return { valid: true };
   }
 
   public saveProgram(program: WeeklyProgram): void {
@@ -980,6 +1382,7 @@ class StorageService {
         supervisorId,
         academicYearId: currentWeek.academicYearId,
         weekId: currentWeekId,
+        planType: 'Planning',
         status: 'Draft',
         createdAt: now
       };
@@ -989,12 +1392,15 @@ class StorageService {
       this.saveProgram(targetProg);
     }
 
+    const createdProg: WeeklyProgram = targetProg;
+
     // Map items to new week dates
     const currentWeekStart = new Date(currentWeek.startDate);
     const prevWeek = this.getWeekById(previousWeekId);
     const prevWeekStart = prevWeek ? new Date(prevWeek.startDate) : currentWeekStart;
 
     prevItems.forEach(oldItem => {
+      if (!oldItem.dayDate) return;
       const oldItemDate = new Date(oldItem.dayDate);
       const dayDiff = Math.round((oldItemDate.getTime() - prevWeekStart.getTime()) / (24 * 3600 * 1000));
       const newItemDate = new Date(currentWeekStart.getTime() + dayDiff * 24 * 3600 * 1000);
@@ -1006,7 +1412,7 @@ class StorageService {
 
       const newItem: ProgramItem = {
         id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        weeklyProgramId: targetProg!.id,
+        weeklyProgramId: createdProg.id,
         dayDate: newDateFormatted,
         dayName: oldItem.dayName,
         schoolId: oldItem.schoolId,
@@ -1022,8 +1428,8 @@ class StorageService {
       this.saveProgramItem(newItem);
     });
 
-    this.addAuditLog('SUPERVISOR', supervisorId, 'نسخ برنامج الأسبوع السابق', 'WeeklyProgram', targetProg.id, `نسخ من ${previousWeekId} إلى ${currentWeekId} كمسودة`);
-    return targetProg;
+    this.addAuditLog('SUPERVISOR', supervisorId, 'نسخ برنامج الأسبوع السابق', 'WeeklyProgram', createdProg.id, `نسخ من ${previousWeekId} إلى ${currentWeekId} كمسودة`);
+    return createdProg;
   }
 
   // --- Notifications ---

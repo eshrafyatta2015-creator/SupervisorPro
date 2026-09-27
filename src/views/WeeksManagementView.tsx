@@ -5,18 +5,17 @@ import {
   Calendar,
   Lock,
   Unlock,
-  RotateCcw,
-  Copy,
-  Trash2,
-  Clock,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Clock,
+  Sparkles,
+  Check,
+  X
 } from 'lucide-react';
 import { Week, User, AcademicYear } from '../types';
 import { storage } from '../services/storage';
 import { Modal } from '../components/Modal';
-import { formatDate, formatDateTime } from '../utils/date';
-import { CountdownTimer } from '../components/CountdownTimer';
+import { formatDate } from '../utils/date';
 
 interface WeeksManagementViewProps {
   currentUser: User;
@@ -33,38 +32,34 @@ export const WeeksManagementView: React.FC<WeeksManagementViewProps> = ({ curren
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [openSubmissionAt, setOpenSubmissionAt] = useState('');
-  const [closeSubmissionAt, setCloseSubmissionAt] = useState('');
-  const [allowEditAfterSubmit, setAllowEditAfterSubmit] = useState(false);
-  const [status, setStatus] = useState<'NotStarted' | 'Open' | 'Closed'>('NotStarted');
+  const [isActive, setIsActive] = useState(true);
+  const [planningOpen, setPlanningOpen] = useState(true);
+  const [actualOpen, setActualOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
 
   const weeks = storage.getWeeks();
   const academicYears = storage.getAcademicYears();
   const currentAcademicYear = storage.getCurrentAcademicYear();
+  const currentActiveWeek = storage.getCurrentWeek();
 
   const handleOpenAdd = () => {
     setEditingWeek(null);
     const nextNumber = weeks.length > 0 ? Math.max(...weeks.map(w => w.weekNumber)) + 1 : 1;
     setAcademicYearId(currentAcademicYear?.id || (academicYears[0]?.id || ''));
     setWeekNumber(nextNumber);
-    setName(`الأسبوع رقم ${nextNumber}`);
+    setName(`الأسبوع ${nextNumber}`);
 
     // Default dates
     const now = new Date();
     const start = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
     const end = new Date(start.getTime() + 4 * 24 * 3600 * 1000);
 
-    const sStr = start.toISOString().split('T')[0];
-    const eStr = end.toISOString().split('T')[0];
-
-    setStartDate(sStr);
-    setEndDate(eStr);
-    setOpenSubmissionAt(new Date(start.getTime() - 2 * 24 * 3600 * 1000).toISOString().slice(0, 16));
-    setCloseSubmissionAt(new Date(start.getTime() + 3 * 24 * 3600 * 1000).toISOString().slice(0, 16));
-    setAllowEditAfterSubmit(false);
-    setStatus('NotStarted');
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+    setIsActive(false);
+    setPlanningOpen(true);
+    setActualOpen(false);
     setNotes('');
     setFormError('');
     setShowAddEditModal(true);
@@ -77,10 +72,9 @@ export const WeeksManagementView: React.FC<WeeksManagementViewProps> = ({ curren
     setName(w.name);
     setStartDate(w.startDate);
     setEndDate(w.endDate);
-    setOpenSubmissionAt(w.openSubmissionAt ? new Date(w.openSubmissionAt).toISOString().slice(0, 16) : '');
-    setCloseSubmissionAt(w.closeSubmissionAt ? new Date(w.closeSubmissionAt).toISOString().slice(0, 16) : '');
-    setAllowEditAfterSubmit(w.allowEditAfterSubmit);
-    setStatus(w.status);
+    setIsActive(w.isActive ?? (w.status === 'Open'));
+    setPlanningOpen(w.planningOpen ?? false);
+    setActualOpen(w.actualOpen ?? false);
     setNotes(w.notes || '');
     setFormError('');
     setShowAddEditModal(true);
@@ -95,362 +89,346 @@ export const WeeksManagementView: React.FC<WeeksManagementViewProps> = ({ curren
       return;
     }
 
-    if (startDate >= endDate) {
-      setFormError('تاريخ نهاية الأسبوع يجب أن يكون بعد تاريخ البداية.');
+    // Validation against dates overlap and end < start
+    const validation = storage.validateWeekDates(startDate, endDate, editingWeek?.id);
+    if (!validation.valid) {
+      setFormError(validation.error || 'خطأ في التواريخ المدخلة.');
       return;
     }
 
-    const weekData: Week = {
+    const weekToSave: Week = {
       id: editingWeek ? editingWeek.id : `week_${Date.now()}`,
-      academicYearId,
+      academicYearId: academicYearId || currentAcademicYear?.id || 'year_2026_2027',
       weekNumber: Number(weekNumber),
       name: name.trim(),
       startDate,
       endDate,
-      openSubmissionAt: new Date(openSubmissionAt).toISOString(),
-      closeSubmissionAt: new Date(closeSubmissionAt).toISOString(),
-      allowEditAfterSubmit,
-      status,
+      status: isActive ? 'Open' : 'Closed',
+      isActive,
+      planningOpen,
+      actualOpen,
       notes: notes.trim(),
       createdAt: editingWeek ? editingWeek.createdAt : new Date().toISOString()
     };
 
-    storage.saveWeek(weekData);
+    // If making this active, deactivate others
+    if (isActive) {
+      weeks.forEach(w => {
+        if (w.id !== weekToSave.id) {
+          w.isActive = false;
+          w.status = 'Closed';
+        }
+      });
+    }
+
+    storage.saveWeek(weekToSave);
     setShowAddEditModal(false);
-    onShowToast(editingWeek ? 'تم تعديل بيانات الأسبوع بنجاح.' : 'تمت إضافة الأسبوع بنجاح.', 'success');
+    onShowToast(editingWeek ? 'تم تعديل إعدادات الأسبوع بنجاح.' : 'تم إنشاء الأسبوع الجديد بنجاح.', 'success');
   };
 
-  const handleQuickStatusChange = (w: Week, newStatus: 'Open' | 'Closed') => {
-    w.status = newStatus;
-    if (newStatus === 'Open') {
-      // Ensure open submission date is now and close is in 3 days if expired
-      w.openSubmissionAt = new Date().toISOString();
-      if (new Date(w.closeSubmissionAt).getTime() <= Date.now()) {
-        w.closeSubmissionAt = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
-      }
-    }
-    storage.saveWeek(w);
-    onShowToast(
-      newStatus === 'Open'
-        ? `تم فتح فترة استقبال البرامج لـ (${w.name}) بنجاح.`
-        : `تم إغلاق فترة استقبال البرامج لـ (${w.name}).`,
-      newStatus === 'Open' ? 'success' : 'warning'
-    );
+  // Quick toggles
+  const handleTogglePlanning = (w: Week) => {
+    storage.togglePlanningOpen(w.id, !w.planningOpen);
+    onShowToast(`تم ${!w.planningOpen ? 'فتح' : 'إغلاق'} إرسال برنامج التخطيط لـ (${w.name}).`, 'info');
   };
 
-  const handleDeleteWeek = (id: string) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذا الأسبوع؟')) return;
-    const ok = storage.deleteWeek(id);
-    if (ok) {
-      onShowToast('تم حذف الأسبوع بنجاح.', 'info');
-    } else {
-      onShowToast('لا يمكن حذف هذا الأسبوع لأنه يحتوي على برامج مرسلة مسجلة.', 'error');
-    }
+  const handleToggleActual = (w: Week) => {
+    storage.toggleActualOpen(w.id, !w.actualOpen);
+    onShowToast(`تم ${!w.actualOpen ? 'فتح' : 'إغلاق'} إرسال البرنامج الفعلي لـ (${w.name}).`, 'info');
+  };
+
+  const handleSetActive = (w: Week) => {
+    weeks.forEach(item => {
+      item.isActive = item.id === w.id;
+      item.status = item.id === w.id ? 'Open' : 'Closed';
+      storage.saveWeek(item);
+    });
+    onShowToast(`تم تعيين (${w.name}) كأسبوع نشط حالياً.`, 'success');
   };
 
   return (
     <div className="space-y-6">
-      {/* Title */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top Banner */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black text-slate-900">إدارة الأسابيع وفترات إرسال البرامج</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            التحكم المركزي في تواريخ ومواعيد فتح وإغلاق إرسال البرامج الأسبوعية للمشرفين.
+          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">إدارة الأسابيع وفترات الإرسال</h1>
+          <p className="text-xs text-slate-500 mt-1">
+            التحكم في فترات فتح وإغلاق إرسال برنامج التخطيط الأسبوعي والبرنامج الفعلي للمشرفين.
           </p>
         </div>
 
         <button
           type="button"
           onClick={handleOpenAdd}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
+          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
-          <span>إضافة أسبوع جديد</span>
+          <span>إنشاء أسبوع جديد</span>
         </button>
       </div>
 
-      {/* Weeks Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {weeks.map(w => {
-          const year = academicYears.find(y => y.id === w.academicYearId);
-          const isOpen = w.status === 'Open';
-          const isClosed = w.status === 'Closed';
-
-          return (
-            <div
-              key={w.id}
-              className={`p-5 rounded-2xl border transition-all ${
-                isOpen
-                  ? 'bg-white border-emerald-300 shadow-sm ring-1 ring-emerald-500/20'
-                  : 'bg-white border-slate-200 shadow-xs'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-extrabold text-slate-900">{w.name}</h3>
-                    <span className="text-xs text-slate-400 font-semibold">(أسبوع #{w.weekNumber})</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-500">
-                    العام الدراسي: {year?.name || 'غير محدد'}
-                  </span>
-                </div>
-
-                <div>
-                  {isOpen ? (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      <Unlock className="w-3.5 h-3.5" />
-                      <span>مفتوح للإرسال</span>
-                    </span>
-                  ) : isClosed ? (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>مغلق</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
-                      <span>لم يبدأ بعد</span>
-                    </span>
-                  )}
-                </div>
+      {/* Active Week Interactive Control Panel */}
+      {currentActiveWeek && (
+        <div className="bg-emerald-950 text-white rounded-2xl p-6 shadow-sm border border-emerald-800/80">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-bold text-emerald-400">الأسبوع الفعّال حالياً للنظام:</span>
               </div>
-
-              {/* Dates */}
-              <div className="grid grid-cols-2 gap-3 mt-4 p-3 bg-slate-50 rounded-xl text-xs">
-                <div>
-                  <span className="text-slate-400 block text-[10px]">فترة الأسبوع:</span>
-                  <span className="font-bold text-slate-700 tabular-nums">
-                    {formatDate(w.startDate)} - {formatDate(w.endDate)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">موعد إغلاق الإرسال:</span>
-                  <span className="font-bold text-rose-700 tabular-nums">
-                    {formatDateTime(w.closeSubmissionAt)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Countdown if open */}
-              {isOpen && (
-                <div className="mt-3">
-                  <CountdownTimer targetDate={w.closeSubmissionAt} variant="compact" />
-                </div>
-              )}
-
-              {/* Notes */}
-              {w.notes && (
-                <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-                  ملاحظات: {w.notes}
-                </p>
-              )}
-
-              {/* Control Action Buttons */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  {!isOpen ? (
-                    <button
-                      type="button"
-                      onClick={() => handleQuickStatusChange(w, 'Open')}
-                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      <Unlock className="w-3.5 h-3.5" />
-                      <span>فتح الإرسال</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleQuickStatusChange(w, 'Closed')}
-                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>إغلاق الإرسال</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(w)}
-                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100"
-                    title="تعديل الأسبوع"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleDeleteWeek(w.id)}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
-                  title="حذف الأسبوع"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <h2 className="text-lg font-black">{currentActiveWeek.name}</h2>
+              <div className="text-xs text-slate-300 mt-0.5 tabular-nums">
+                الفترة الرسمية: من {currentActiveWeek.startDate} إلى {currentActiveWeek.endDate}
               </div>
             </div>
-          );
-        })}
+
+            {/* Quick Action Buttons for the Active Week */}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleTogglePlanning(currentActiveWeek)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 ${
+                  currentActiveWeek.planningOpen
+                    ? 'bg-rose-500 hover:bg-rose-600 text-white'
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                }`}
+              >
+                {currentActiveWeek.planningOpen ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                <span>{currentActiveWeek.planningOpen ? 'إغلاق إرسال برنامج التخطيط' : 'فتح إرسال برنامج التخطيط'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleToggleActual(currentActiveWeek)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 ${
+                  currentActiveWeek.actualOpen
+                    ? 'bg-slate-700 hover:bg-slate-600 text-white border border-slate-600'
+                    : 'bg-sky-500 hover:bg-sky-600 text-white'
+                }`}
+              >
+                {currentActiveWeek.actualOpen ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                <span>{currentActiveWeek.actualOpen ? 'إغلاق إرسال البرنامج الفعلي' : 'فتح إرسال البرنامج الفعلي'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Weeks Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-sm font-bold text-slate-900">سجل الأسابيع المعتمدة</h3>
+            <span className="text-xs bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full tabular-nums">
+              {weeks.length} أسبوع
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-right text-xs">
+            <thead className="bg-slate-50/80 text-slate-600 border-b border-slate-200 font-bold">
+              <tr>
+                <th className="py-3 px-4">اسم الأسبوع</th>
+                <th className="py-3 px-4">تاريخ البداية</th>
+                <th className="py-3 px-4">تاريخ النهاية</th>
+                <th className="py-3 px-4 text-center">الحالة</th>
+                <th className="py-3 px-4 text-center">إرسال التخطيط</th>
+                <th className="py-3 px-4 text-center">إرسال الفعلي</th>
+                <th className="py-3 px-4 text-center">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {weeks.map(w => {
+                const isCurrent = w.id === currentActiveWeek?.id;
+                return (
+                  <tr key={w.id} className={`hover:bg-slate-50/60 transition-colors ${isCurrent ? 'bg-emerald-50/30' : ''}`}>
+                    <td className="py-3.5 px-4 font-bold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <span>{w.name}</span>
+                        {isCurrent && (
+                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-600 text-white">
+                            النشط
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600 tabular-nums">
+                      {w.startDate}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600 tabular-nums">
+                      {w.endDate}
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      {w.isActive ? (
+                        <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          نشط
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetActive(w)}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-800 transition-colors"
+                        >
+                          تفعيل كنشط
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePlanning(w)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                          w.planningOpen
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : 'bg-rose-50 text-rose-800 border-rose-300'
+                        }`}
+                      >
+                        {w.planningOpen ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                        <span>{w.planningOpen ? 'مفتوح' : 'مغلق'}</span>
+                      </button>
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActual(w)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                          w.actualOpen
+                            ? 'bg-sky-50 text-sky-800 border-sky-300'
+                            : 'bg-slate-100 text-slate-600 border-slate-300'
+                        }`}
+                      >
+                        {w.actualOpen ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                        <span>{w.actualOpen ? 'مفتوح' : 'مغلق'}</span>
+                      </button>
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(w)}
+                        className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="تعديل إعدادات الأسبوع"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Add / Edit Modal */}
+      {/* Add / Edit Week Modal */}
       <Modal
         isOpen={showAddEditModal}
         onClose={() => setShowAddEditModal(false)}
-        title={editingWeek ? 'تعديل الأسبوع وفترة الإرسال' : 'إضافة أسبوع دراسي جديد'}
-        maxWidth="xl"
+        title={editingWeek ? 'تعديل إعدادات الأسبوع' : 'إنشاء أسبوع جديد'}
+        subtitle="قسم الإشراف والتأهيل التربوي - مديرية يطا"
       >
-        <form onSubmit={handleSaveWeek} className="space-y-4">
+        <form onSubmit={handleSaveWeek} className="space-y-4 text-xs">
           {formError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl">
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-medium">
               {formError}
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">السنة الدراسية</label>
-              <select
-                value={academicYearId}
-                onChange={(e) => setAcademicYearId(e.target.value)}
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                {academicYears.map(y => (
-                  <option key={y.id} value={y.id}>{y.name}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">اسم الأسبوع</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+              placeholder="مثال: الأسبوع الأول"
+              required
+            />
+          </div>
 
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                رقم الأسبوع <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={weekNumber}
-                min={1}
-                max={50}
-                onChange={(e) => setWeekNumber(Number(e.target.value))}
-                required
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 tabular-nums"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                اسم الأسبوع <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="مثال: الأسبوع الأول، الأسبوع الثاني..."
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                تاريخ بداية الأسبوع <span className="text-rose-500">*</span>
-              </label>
+              <label className="block font-bold text-slate-700 mb-1">تاريخ بداية الأسبوع</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 required
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                تاريخ نهاية الأسبوع <span className="text-rose-500">*</span>
-              </label>
+              <label className="block font-bold text-slate-700 mb-1">تاريخ نهاية الأسبوع</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 required
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                تاريخ ووقت فتح إرسال البرامج
-              </label>
-              <input
-                type="datetime-local"
-                value={openSubmissionAt}
-                onChange={(e) => setOpenSubmissionAt(e.target.value)}
-                required
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 tabular-nums"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                تاريخ ووقت إغلاق الإرسال <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={closeSubmissionAt}
-                onChange={(e) => setCloseSubmissionAt(e.target.value)}
-                required
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 tabular-nums"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">حالة الأسبوع</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as 'NotStarted' | 'Open' | 'Closed')}
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                <option value="NotStarted">لم يبدأ</option>
-                <option value="Open">مفتوح للإرسال</option>
-                <option value="Closed">مغلق</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">السماح بالتعديل بعد الإرسال</label>
-              <select
-                value={allowEditAfterSubmit ? 'yes' : 'no'}
-                onChange={(e) => setAllowEditAfterSubmit(e.target.value === 'yes')}
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                <option value="no">لا، يمنع التعديل إلا بإعادة فتح</option>
-                <option value="yes">نعم، مسموح التعديل حتى موعد الإغلاق</option>
-              </select>
             </div>
           </div>
 
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+            <h4 className="font-bold text-slate-800 mb-1">إعدادات الإرسال والنشاط للأسبوع:</h4>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span className="font-bold text-slate-800">تعيين كأسبوع نشط حالياً في النظام</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={planningOpen}
+                onChange={(e) => setPlanningOpen(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span className="text-slate-700">برنامج التخطيط الأسبوعي: <strong className="text-emerald-700">مفتوح للإرسال</strong></span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={actualOpen}
+                onChange={(e) => setActualOpen(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+              />
+              <span className="text-slate-700">البرنامج الفعلي: <strong className="text-sky-700">مفتوح للإرسال</strong></span>
+            </label>
+          </div>
+
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">ملاحظات وتوجيهات الأسبوع</label>
+            <label className="block font-bold text-slate-700 mb-1">ملاحظات توجيهية للأسبوع (اختياري)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="مثال: التركيز على تطبيق خطة الفاقد التعليمي وزيارة المدارس النائية..."
-              className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full p-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              placeholder="أي توجيهات خاصة بالزيارات أو البرامج..."
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+          <div className="pt-2 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowAddEditModal(false)}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs"
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition-colors"
             >
-              {editingWeek ? 'حفظ التعديلات' : 'إضافة الأسبوع'}
+              حفظ إعدادات الأسبوع
             </button>
           </div>
         </form>

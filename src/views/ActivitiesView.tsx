@@ -37,7 +37,7 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({ currentUser, onS
   const handleOpenEdit = (act: Activity) => {
     setEditingActivity(act);
     setName(act.name);
-    setCode(act.code);
+    setCode(act.code || '');
     setDescription(act.description || '');
     setIsActive(act.isActive);
     setColor(act.color || 'emerald');

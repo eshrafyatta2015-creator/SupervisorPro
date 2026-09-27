@@ -47,8 +47,8 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
     setEditingSchool(school);
     setName(school.name);
     setRegion(school.region);
-    setStage(school.stage);
-    setType(school.type);
+    setStage(school.stage || 'أساسي');
+    setType(school.type || 'مختلط');
     setIsActive(school.isActive);
     setNotes(school.notes || '');
     setFormError('');
@@ -98,8 +98,8 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
     const rows = filteredSchools.map(s => [
       s.name,
       s.region,
-      s.stage,
-      s.type,
+      s.stage || 'أساسي',
+      s.type || 'مختلط',
       s.isActive ? 'مفعلة' : 'معطلة',
       s.notes || '-',
       formatDate(s.createdAt)

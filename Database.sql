@@ -60,17 +60,23 @@ BEGIN
         [Id] NVARCHAR(450) NOT NULL PRIMARY KEY,
         [Username] NVARCHAR(256) NOT NULL UNIQUE,
         [NormalizedUsername] NVARCHAR(256) NOT NULL,
-        [PasswordHash] NVARCHAR(MAX) NOT NULL,
+        [DisplayName] NVARCHAR(256) NOT NULL,
         [FullName] NVARCHAR(256) NOT NULL,
+        [PasswordHash] NVARCHAR(MAX) NOT NULL,
+        [PasswordSalt] NVARCHAR(256) NULL,
+        [Role] NVARCHAR(50) NOT NULL DEFAULT N'Supervisor', -- Administrator, Supervisor
         [Email] NVARCHAR(256) NULL,
-        [SupervisorId] NVARCHAR(450) NULL,
+        [SupervisorId] NVARCHAR(450) NULL, -- NULL for Administrator, Supervisor ID for Supervisors
         [IsActive] BIT NOT NULL DEFAULT 1,
+        [MustChangePassword] BIT NOT NULL DEFAULT 1,
         [FailedLoginAttempts] INT NOT NULL DEFAULT 0,
         [LockoutEnd] DATETIMEOFFSET NULL,
         [LastLoginAt] DATETIME2 NULL,
         [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
     );
     CREATE NONCLUSTERED INDEX [IX_Users_Username] ON [dbo].[Users]([NormalizedUsername]);
+    CREATE NONCLUSTERED INDEX [IX_Users_Role] ON [dbo].[Users]([Role]);
+    CREATE NONCLUSTERED INDEX [IX_Users_SupervisorId] ON [dbo].[Users]([SupervisorId]);
 END
 GO
 
@@ -350,20 +356,54 @@ END
 GO
 
 -- Admin User
--- PasswordHash for 'Admin@123456'
+-- PasswordHash for 'admin123'
 IF NOT EXISTS (SELECT 1 FROM [dbo].[Users] WHERE [Username] = N'admin')
 BEGIN
     INSERT INTO [dbo].[Users] (
-        [Id], [Username], [NormalizedUsername], [PasswordHash], [FullName], [Email], [IsActive], [CreatedAt]
+        [Id], [Username], [NormalizedUsername], [DisplayName], [FullName], [PasswordHash], [Role], [Email], [SupervisorId], [IsActive], [MustChangePassword], [CreatedAt]
     )
     VALUES (
-        N'usr_admin', N'admin', N'ADMIN',
-        N'AQAAAAIAAYagAAAAEOc9x0sU1H/c7ZgU+y4gZ9E8N0M7Y4x+1v5Qv7kP6l8X2a9w==', -- Secure ASP.NET Identity Hash
-        N'مدير قسم الإشراف - يطا', N'admin.eshraf@moe.edu.ps', 1, SYSUTCDATETIME()
+        N'usr_admin', N'admin', N'ADMIN', N'مسؤول النظام', N'مسؤول النظام',
+        N'AQAAAAIAAYagAAAAEI7W8qZp8Y+admin123_IdentityHashExample_SecureHash==',
+        N'Administrator', N'admin.eshraf@moe.edu.ps', NULL, 1, 0, SYSUTCDATETIME()
     );
 
     INSERT INTO [dbo].[UserRoles] ([UserId], [RoleId])
     VALUES (N'usr_admin', N'role_admin');
+END
+GO
+
+-- Supervisor 1: أحمد محمد (ahmad / 123456)
+IF NOT EXISTS (SELECT 1 FROM [dbo].[Users] WHERE [Username] = N'ahmad')
+BEGIN
+    INSERT INTO [dbo].[Users] (
+        [Id], [Username], [NormalizedUsername], [DisplayName], [FullName], [PasswordHash], [Role], [Email], [SupervisorId], [IsActive], [MustChangePassword], [CreatedAt]
+    )
+    VALUES (
+        N'usr_sup_1', N'ahmad', N'AHMAD', N'أحمد محمد', N'أحمد محمد',
+        N'AQAAAAIAAYagAAAAEOc9x0sU1H/123456_IdentityHashExample_SecureHash==',
+        N'Supervisor', N'ahmad@moe.edu.ps', N'sup_1', 1, 1, SYSUTCDATETIME()
+    );
+
+    INSERT INTO [dbo].[UserRoles] ([UserId], [RoleId])
+    VALUES (N'usr_sup_1', N'role_supervisor');
+END
+GO
+
+-- Supervisor 2: محمد علي (mohammad / 123456)
+IF NOT EXISTS (SELECT 1 FROM [dbo].[Users] WHERE [Username] = N'mohammad')
+BEGIN
+    INSERT INTO [dbo].[Users] (
+        [Id], [Username], [NormalizedUsername], [DisplayName], [FullName], [PasswordHash], [Role], [Email], [SupervisorId], [IsActive], [MustChangePassword], [CreatedAt]
+    )
+    VALUES (
+        N'usr_sup_2', N'mohammad', N'MOHAMMAD', N'محمد علي', N'محمد علي',
+        N'AQAAAAIAAYagAAAAEOc9x0sU1H/123456_IdentityHashExample_SecureHash==',
+        N'Supervisor', N'mohammad@moe.edu.ps', N'sup_2', 1, 1, SYSUTCDATETIME()
+    );
+
+    INSERT INTO [dbo].[UserRoles] ([UserId], [RoleId])
+    VALUES (N'usr_sup_2', N'role_supervisor');
 END
 GO
 

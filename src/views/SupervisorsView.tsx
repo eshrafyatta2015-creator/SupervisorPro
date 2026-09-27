@@ -37,14 +37,14 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
-  const [initialPassword, setInitialPassword] = useState('User@123456');
+  const [initialPassword, setInitialPassword] = useState('123456');
   const [status, setStatus] = useState<'Active' | 'Inactive'>('Active');
   const [formError, setFormError] = useState('');
 
   // Reset password modal
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetTargetUser, setResetTargetUser] = useState<User | null>(null);
-  const [newPassword, setNewPassword] = useState('User@123456');
+  const [newPassword, setNewPassword] = useState('123456');
 
   // Supervisor Programs Modal
   const [showProgramsModal, setShowProgramsModal] = useState(false);
@@ -64,7 +64,7 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
     setPhone('');
     setEmail('');
     setUsername('');
-    setInitialPassword('User@123456');
+    setInitialPassword('123456');
     setStatus('Active');
     setFormError('');
     setShowAddEditModal(true);
@@ -140,7 +140,7 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
       return;
     }
     setResetTargetUser(u);
-    setNewPassword('User@123456');
+    setNewPassword('123456');
     setShowResetModal(true);
   };
 

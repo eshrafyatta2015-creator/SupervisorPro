@@ -181,7 +181,7 @@ export const UnsubmittedReportView: React.FC<UnsubmittedReportViewProps> = ({ cu
           </div>
 
           <div className="flex items-center gap-3">
-            <CountdownTimer targetDate={selectedWeek.closeSubmissionAt} variant="compact" />
+            <CountdownTimer targetDate={selectedWeek.closeSubmissionAt || ''} variant="compact" />
 
             {unsubmittedSupervisors.length > 0 && (
               <button

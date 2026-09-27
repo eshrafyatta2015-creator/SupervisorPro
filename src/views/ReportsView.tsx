@@ -101,12 +101,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser, onShowToa
           i.supervisorName,
           i.specialization,
           i.weekName,
-          i.dayName,
+          i.dayName || '-',
           formatDate(i.dayDate),
           sch?.name || '-',
           act?.name || '-',
           `${i.startTime} - ${i.endTime}`,
-          i.objective,
+          i.objective || '',
           i.programStatus
         ];
       });
@@ -161,7 +161,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser, onShowToa
 
         return [
           a.name,
-          a.code,
+          a.code || '',
           items.length,
           uniqueSups,
           uniqueSchools

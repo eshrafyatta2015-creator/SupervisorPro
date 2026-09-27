@@ -212,6 +212,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onShowT
                   className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-mono"
                 />
               </div>
+
+              <div className="sm:col-span-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={settings.forceChangePasswordOnFirstLogin !== false}
+                    onChange={(e) => setSettings({ ...settings, forceChangePasswordOnFirstLogin: e.target.checked })}
+                    className="w-4 h-4 mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">
+                      إجبار المستخدم على تغيير كلمة المرور عند أول دخول
+                    </span>
+                    <span className="text-[11px] text-slate-500 block mt-0.5 leading-relaxed">
+                      عند التفعيل، يُلزم المشرف الجديد بتعيين كلمة مرور شخصية خاصة به عند أول تسجيل دخول بدلاً من كلمة المرور الابتدائية (123456).
+                    </span>
+                  </div>
+                </label>
+              </div>
             </div>
 
             <div className="pt-4 flex justify-end">

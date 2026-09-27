@@ -137,57 +137,75 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="font-bold text-slate-700">{timeFormatted}</span>
             </div>
 
-            {/* Quick Switch Role Dropdown (Useful for testing workflow without retyping credentials) */}
+            {/* User Profile Menu */}
             <div className="relative" ref={userMenuRef}>
               <button
                 type="button"
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
-                title="التبديل بين الحسابات لأغراض التجربة"
+                title="خيارات الحساب"
               >
-                <Users className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden md:inline text-slate-600">تبديل الحساب:</span>
+                <UserIcon className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden md:inline text-slate-600">الحساب:</span>
                 <span className="text-emerald-700 font-bold max-w-[120px] truncate">{currentUser.fullName}</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
 
               {showUserMenu && (
-                <div className="absolute left-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-fade-in">
-                  <div className="px-3 py-2 border-b border-slate-100">
-                    <p className="text-xs font-bold text-slate-800">اختر مستخدماً للتبديل الفوري:</p>
-                    <p className="text-[11px] text-slate-400">لاختبار تجربة المشرف أو المسؤول</p>
+                <div className="absolute left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-fade-in text-right">
+                  <div className="px-3.5 py-2.5 border-b border-slate-100 bg-slate-50/50">
+                    <p className="text-xs font-bold text-slate-800">{currentUser.fullName}</p>
+                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">@{currentUser.username}</p>
+                    <div className="mt-1">
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        currentUser.role === 'Administrator'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      }`}>
+                        {currentUser.role === 'Administrator' ? 'مسؤول النظام (Administrator)' : 'مشرف تربوي (Supervisor)'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="max-h-60 overflow-y-auto py-1">
-                    {allUsers.map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => handleQuickSwitchUser(u.id)}
-                        className={`w-full text-right px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                          u.id === currentUser.id ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-slate-700'
-                        }`}
-                      >
-                        <div className="truncate">
-                          <div>{u.fullName}</div>
-                          <div className="text-[10px] text-slate-400">
-                            {u.role === 'Administrator' ? 'مسؤول النظام (Admin)' : 'مشرف تربوي'}
-                          </div>
-                        </div>
-                        {u.id === currentUser.id && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="border-t border-slate-100 p-2">
+
+                  <div className="p-1 space-y-0.5">
                     <button
                       type="button"
                       onClick={() => {
                         setShowUserMenu(false);
                         onNavigate('profile');
                       }}
-                      className="w-full text-right text-xs text-slate-600 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 flex items-center gap-2"
+                      className="w-full text-right text-xs text-slate-700 hover:text-emerald-800 p-2 rounded-lg hover:bg-slate-50 flex items-center gap-2 transition-colors"
                     >
-                      <UserIcon className="w-3.5 h-3.5" />
+                      <UserIcon className="w-3.5 h-3.5 text-slate-500" />
                       <span>الملف الشخصي وتغيير كلمة المرور</span>
+                    </button>
+
+                    {currentUser.role === 'Administrator' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          onNavigate('supervisors');
+                        }}
+                        className="w-full text-right text-xs text-slate-700 hover:text-emerald-800 p-2 rounded-lg hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                      >
+                        <Users className="w-3.5 h-3.5 text-slate-500" />
+                        <span>إدارة حسابات المشرفين</span>
+                      </button>
+                    )}
+
+                    <div className="border-t border-slate-100 my-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onLogout();
+                      }}
+                      className="w-full text-right text-xs text-rose-700 hover:bg-rose-50 p-2 rounded-lg flex items-center gap-2 transition-colors font-semibold"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>تسجيل الخروج والتبديل لمستخدم آخر</span>
                     </button>
                   </div>
                 </div>
@@ -259,16 +277,25 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Logout Button */}
-            <button
-              type="button"
-              onClick={onLogout}
-              className="p-2 rounded-xl text-slate-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
-              title="تسجيل الخروج"
-              aria-label="تسجيل الخروج"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+            {/* User Info & Logout Button */}
+            <div className="flex items-center gap-2 pr-1 border-r border-slate-200">
+              <div className="text-right hidden sm:block pr-1">
+                <div className="text-xs font-bold text-slate-800 truncate max-w-[140px]">{currentUser.fullName}</div>
+                <div className="text-[10px] text-emerald-700 font-semibold">
+                  {currentUser.role === 'Administrator' ? 'مسؤول النظام' : 'مشرف تربوي'}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/80 transition-colors text-xs font-bold shadow-2xs"
+                title="تسجيل الخروج وإنهاء الجلسة بالكامل"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">تسجيل الخروج</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
