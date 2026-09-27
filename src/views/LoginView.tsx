@@ -181,22 +181,44 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <option value="admin">مسؤول النظام (Administrator)</option>
                 </optgroup>
                 <optgroup label="المشرفون التربويون المعتمدون (الفعّالون)">
-                  {activeSupervisors.map(({ user, supervisor }) => (
-                    <option key={user.id} value={user.id}>
-                      {supervisor.name} - ({supervisor.specialization})
+                  {activeSupervisors.length > 0 ? (
+                    activeSupervisors.map(({ user, supervisor }) => (
+                      <option key={user.id} value={user.id}>
+                        {supervisor.name} - ({supervisor.specialization})
+                      </option>
+                    ))
+                  ) : (
+                    <option disabled value="">
+                      (لا يوجد مشرفين مسجلين حالياً - يرجى تسجيل الدخول كمسؤول)
                     </option>
-                  ))}
+                  )}
                 </optgroup>
               </select>
               <UserCheck className="w-4 h-4 text-emerald-600 absolute right-3.5 top-4 pointer-events-none" />
               <div className="absolute left-3.5 top-4 pointer-events-none text-slate-400 text-xs">▼</div>
             </div>
+            {activeSupervisors.length === 0 && (
+              <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 leading-relaxed flex items-start gap-2">
+                <span className="text-sm leading-none">ℹ️</span>
+                <span>
+                  قاعدة البيانات فارغة من أي حسابات مشرفين تجريبية. قم بتسجيل الدخول كـ <strong>مسؤول النظام</strong> للبدء بإضافة وتعيين المشرفين التربويين.
+                </span>
+              </div>
+            )}
             <div className="mt-1 text-[11px] text-slate-400 flex items-center justify-between">
               <span>
-                {isAdminSelected ? 'حساب إدارة النظام والصلاحيات الكاملة' : `حساب المشرف: ${selectedSupervisor?.supervisor.name}`}
+                {isAdminSelected
+                  ? 'حساب إدارة النظام والصلاحيات الكاملة'
+                  : selectedSupervisor
+                  ? `حساب المشرف: ${selectedSupervisor.supervisor.name}`
+                  : 'لا يوجد مشرف محدد'}
               </span>
               <span className="font-mono text-[10px] text-slate-500">
-                {isAdminSelected ? 'Username: admin' : `Username: ${selectedSupervisor?.user.username}`}
+                {isAdminSelected
+                  ? 'Username: admin'
+                  : selectedSupervisor
+                  ? `Username: ${selectedSupervisor.user.username}`
+                  : ''}
               </span>
             </div>
           </div>

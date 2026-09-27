@@ -373,39 +373,10 @@ BEGIN
 END
 GO
 
--- Supervisor 1: أحمد محمد (ahmad / 123456)
-IF NOT EXISTS (SELECT 1 FROM [dbo].[Users] WHERE [Username] = N'ahmad')
-BEGIN
-    INSERT INTO [dbo].[Users] (
-        [Id], [Username], [NormalizedUsername], [DisplayName], [FullName], [PasswordHash], [Role], [Email], [SupervisorId], [IsActive], [MustChangePassword], [CreatedAt]
-    )
-    VALUES (
-        N'usr_sup_1', N'ahmad', N'AHMAD', N'أحمد محمد', N'أحمد محمد',
-        N'AQAAAAIAAYagAAAAEOc9x0sU1H/123456_IdentityHashExample_SecureHash==',
-        N'Supervisor', N'ahmad@moe.edu.ps', N'sup_1', 1, 1, SYSUTCDATETIME()
-    );
-
-    INSERT INTO [dbo].[UserRoles] ([UserId], [RoleId])
-    VALUES (N'usr_sup_1', N'role_supervisor');
-END
-GO
-
--- Supervisor 2: محمد علي (mohammad / 123456)
-IF NOT EXISTS (SELECT 1 FROM [dbo].[Users] WHERE [Username] = N'mohammad')
-BEGIN
-    INSERT INTO [dbo].[Users] (
-        [Id], [Username], [NormalizedUsername], [DisplayName], [FullName], [PasswordHash], [Role], [Email], [SupervisorId], [IsActive], [MustChangePassword], [CreatedAt]
-    )
-    VALUES (
-        N'usr_sup_2', N'mohammad', N'MOHAMMAD', N'محمد علي', N'محمد علي',
-        N'AQAAAAIAAYagAAAAEOc9x0sU1H/123456_IdentityHashExample_SecureHash==',
-        N'Supervisor', N'mohammad@moe.edu.ps', N'sup_2', 1, 1, SYSUTCDATETIME()
-    );
-
-    INSERT INTO [dbo].[UserRoles] ([UserId], [RoleId])
-    VALUES (N'usr_sup_2', N'role_supervisor');
-END
-GO
+-- ============================================================================
+-- ملاحظة هامة: تم إفراغ قاعدة البيانات من أي حسابات مشرفين تجريبية
+-- يتم إدخال المشرفين الحقيقيين وتعيين تخصصاتهم من قبل مسؤول النظام
+-- ============================================================================
 
 -- System Settings
 IF NOT EXISTS (SELECT 1 FROM [dbo].[SystemSettings] WHERE [Id] = N'settings_default')

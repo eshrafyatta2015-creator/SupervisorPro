@@ -9,7 +9,8 @@ import {
   XCircle,
   FileSpreadsheet,
   KeyRound,
-  History
+  History,
+  UserX
 } from 'lucide-react';
 import { Supervisor, User } from '../types';
 import { storage } from '../services/storage';
@@ -248,7 +249,18 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSupervisors.map(sup => {
+              {filteredSupervisors.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <UserX className="w-10 h-10 mx-auto mb-2 text-slate-300 stroke-[1.5]" />
+                    <p className="font-bold text-slate-700 text-sm">قاعدة البيانات فارغة من المشرفين حالياً</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      يمكنك البدء بإضافة المشرفين التربويين وتحديد تخصصاتهم بالضغط على زر "إضافة مشرف جديد" بالأعلى.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                filteredSupervisors.map(sup => {
                 const isActive = sup.status === 'Active';
                 return (
                   <tr key={sup.id} className="hover:bg-slate-50/70 transition-colors">
@@ -318,7 +330,7 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>

@@ -72,17 +72,22 @@ class StorageService {
 
   // --- Initialization & Seeding ---
   public async initializeDatabase(): Promise<void> {
-    const initializedVersion = localStorage.getItem('wsp_version_sep_v1');
+    const initializedVersion = localStorage.getItem('wsp_version_empty_sups_v1');
     if (initializedVersion === '1') return;
 
-    console.log('Seeding initial database for WeeklySupervisorProgram with separated roles...');
+    console.log('Seeding clean database for WeeklySupervisorProgram (empty supervisors)...');
+
+    // Clean any prior supervisor data from local storage
+    this.set(STORAGE_KEYS.SUPERVISORS, []);
+    this.set(STORAGE_KEYS.WEEKLY_PROGRAMS, []);
+    this.set(STORAGE_KEYS.PROGRAM_ITEMS, []);
+    this.set(STORAGE_KEYS.PROGRAM_REVIEWS, []);
+    this.set(STORAGE_KEYS.NOTIFICATIONS, []);
 
     // 1. Password Hashes store
     const passwordHashes: Record<string, string> = {};
     const defaultAdminPassword = 'admin123';
-    const defaultSupervisorPassword = '123456';
     const adminHash = await hashPassword(defaultAdminPassword);
-    const supHash = await hashPassword(defaultSupervisorPassword);
 
     passwordHashes['admin'] = adminHash;
 
@@ -201,20 +206,7 @@ class StorageService {
     ];
     this.set(STORAGE_KEYS.SCHOOLS, schools);
 
-    // 7. Supervisors & Linked Users (Active Supervisors in Yatta Directorate)
-    const rawSupervisors = [
-      { name: 'أحمد محمد', username: 'ahmad', nationalId: '984512301', spec: 'الرياضيات', dept: 'الإشراف التربوي - العلوم والرياضيات', phone: '0599123451', email: 'ahmad@moe.edu.ps' },
-      { name: 'محمد علي', username: 'mohammad', nationalId: '984512302', spec: 'اللغة العربية', dept: 'الإشراف التربوي - اللغات', phone: '0599123452', email: 'mohammad@moe.edu.ps' },
-      { name: 'خالد أحمد', username: 'khaled', nationalId: '984512303', spec: 'العلوم العامة والفيزياء', dept: 'الإشراف التربوي - العلوم', phone: '0599123453', email: 'khaled@moe.edu.ps' },
-      { name: 'يوسف حسن', username: 'yousef', nationalId: '984512304', spec: 'اللغة الإنجليزية', dept: 'الإشراف التربوي - اللغات', phone: '0599123454', email: 'yousef@moe.edu.ps' },
-      { name: 'فاطمة إبراهيم', username: 'fatima', nationalId: '984512305', spec: 'المرحلة الأساسية الأولى', dept: 'الإشراف التربوي - المرحلة الأساسية', phone: '0599123455', email: 'fatima@moe.edu.ps' },
-      { name: 'مريم يوسف', username: 'maryam', nationalId: '984512306', spec: 'التربية الإسلامية', dept: 'الإشراف التربوي - الإنسانيات', phone: '0599123456', email: 'maryam@moe.edu.ps' },
-      { name: 'محمود عبد الرحمن', username: 'mahmoud', nationalId: '984512307', spec: 'الاجتماعيات والجغرافيا', dept: 'الإشراف التربوي - الإنسانيات', phone: '0599123457', email: 'mahmoud@moe.edu.ps' },
-      { name: 'إبراهيم محمد', username: 'ibrahim', nationalId: '984512308', spec: 'تكنولوجيا المعلومات والحاسوب', dept: 'الإشراف التربوي - التكنولوجيا', phone: '0599123458', email: 'ibrahim@moe.edu.ps' },
-      { name: 'سناء صالح', username: 'sanaa', nationalId: '984512309', spec: 'التربية الخاصة وصعوبات التعلم', dept: 'الإشراف التربوي - الإرشاد والتأهيل', phone: '0599123459', email: 'sanaa@moe.edu.ps' },
-      { name: 'عمر موسى', username: 'omar', nationalId: '984512310', spec: 'الصحة المدرسية والأنشطة', dept: 'الإشراف والتأهيل التربوي', phone: '0599123460', email: 'omar@moe.edu.ps' }
-    ];
-
+    // 7. Supervisors & Linked Users (Empty database - ready for real supervisor entries)
     // Administrator user (SupervisorId is strictly undefined / NULL)
     const users: User[] = [
       {
@@ -234,269 +226,21 @@ class StorageService {
 
     const supervisors: Supervisor[] = [];
 
-    rawSupervisors.forEach((s, idx) => {
-      const supId = `sup_${idx + 1}`;
-      const userId = `usr_sup_${idx + 1}`;
-      passwordHashes[s.username] = supHash;
-
-      users.push({
-        id: userId,
-        username: s.username,
-        fullName: s.name,
-        email: s.email,
-        role: 'Supervisor',
-        supervisorId: supId,
-        isActive: true,
-        mustChangePassword: true,
-        failedLoginAttempts: 0,
-        createdAt: now.toISOString(),
-        permissions: ['ViewDashboard', 'ViewPrograms']
-      });
-
-      supervisors.push({
-        id: supId,
-        name: s.name,
-        nationalId: s.nationalId,
-        specialization: s.spec,
-        department: s.dept,
-        phone: s.phone,
-        email: s.email,
-        userId: userId,
-        status: 'Active',
-        createdAt: now.toISOString()
-      });
-    });
-
     this.set(STORAGE_KEYS.PASSWORD_HASHES, passwordHashes);
     this.set(STORAGE_KEYS.USERS, users);
     this.set(STORAGE_KEYS.SUPERVISORS, supervisors);
 
-    // 8. Seed Sample Weekly Programs (Approved, Submitted, UnderReview, NeedsRevision, Draft)
+    // 8. Weekly Programs (Empty database)
     const weeklyPrograms: WeeklyProgram[] = [];
     const programItems: ProgramItem[] = [];
     const programReviews: ProgramReview[] = [];
-
-    // Ahmad Najjar (Approved)
-    weeklyPrograms.push({
-      id: 'prog_1',
-      supervisorId: 'sup_1',
-      academicYearId: 'year_2026_2027',
-      weekId: 'week_1',
-      planType: 'Planning',
-      status: 'Approved',
-      submittedAt: new Date(now.getTime() - 48 * 3600 * 1000).toISOString(),
-      reviewedAt: new Date(now.getTime() - 24 * 3600 * 1000).toISOString(),
-      reviewedBy: 'مدير قسم الإشراف - يطا',
-      reviewNotes: 'برنامج متكامل وموزع بشكل ممتاز على مدارس الثانوية والأساسية.',
-      createdAt: new Date(now.getTime() - 60 * 3600 * 1000).toISOString()
-    });
-
-    programReviews.push({
-      id: 'rev_1',
-      weeklyProgramId: 'prog_1',
-      reviewerUserId: 'usr_admin',
-      reviewerName: 'مدير قسم الإشراف - يطا',
-      action: 'Approve',
-      notes: 'تم اعتماد البرنامج بنجاح.',
-      createdAt: new Date(now.getTime() - 24 * 3600 * 1000).toISOString()
-    });
-
-    // Activities for Ahmad Najjar
-    programItems.push(
-      {
-        id: 'item_1_1',
-        weeklyProgramId: 'prog_1',
-        dayDate: '2026-09-27',
-        dayName: 'الأحد',
-        schoolId: 'sch_1',
-        activityId: 'act_1',
-        startTime: '08:00',
-        endTime: '11:00',
-        location: 'غرفة المعلمين ومختبر الرياضيات',
-        objective: 'متابعة تحضير دروس الرياضيات للصفوف 10 و11 وتطبيق الاختبار التشخيصي',
-        notes: 'التركيز على مهارات التفكير العليا',
-        sortOrder: 1,
-        createdAt: now.toISOString()
-      },
-      {
-        id: 'item_1_2',
-        weeklyProgramId: 'prog_1',
-        dayDate: '2026-09-28',
-        dayName: 'الإثنين',
-        schoolId: 'sch_3',
-        activityId: 'act_2',
-        startTime: '08:30',
-        endTime: '11:30',
-        location: 'الصفوف الأساسية',
-        objective: 'متابعة المعلمين الجدد في استراتيجيات التعلم النشط',
-        notes: '',
-        sortOrder: 2,
-        createdAt: now.toISOString()
-      },
-      {
-        id: 'item_1_3',
-        weeklyProgramId: 'prog_1',
-        dayDate: '2026-09-29',
-        dayName: 'الثلاثاء',
-        schoolId: 'sch_5',
-        activityId: 'act_4',
-        startTime: '09:00',
-        endTime: '12:00',
-        location: 'مكتبة المدرسة',
-        objective: 'ورشة عمل حول توظيف التطبيقات الرقمية في تدريس الرياضيات',
-        notes: 'حضور معلمي المبحث في المنطقة',
-        sortOrder: 3,
-        createdAt: now.toISOString()
-      }
-    );
-
-    // Fatima Khalil (Submitted - Waiting Review)
-    weeklyPrograms.push({
-      id: 'prog_2',
-      supervisorId: 'sup_2',
-      academicYearId: 'year_2026_2027',
-      weekId: 'week_1',
-      planType: 'Planning',
-      status: 'Submitted',
-      submittedAt: new Date(now.getTime() - 12 * 3600 * 1000).toISOString(),
-      createdAt: new Date(now.getTime() - 30 * 3600 * 1000).toISOString()
-    });
-
-    programItems.push(
-      {
-        id: 'item_2_1',
-        weeklyProgramId: 'prog_2',
-        dayDate: '2026-09-27',
-        dayName: 'الأحد',
-        schoolId: 'sch_2',
-        activityId: 'act_1',
-        startTime: '08:00',
-        endTime: '10:30',
-        location: 'مدرسة بنات يطا الثانوية',
-        objective: 'متابعة المنهاج الجديد للغة العربية للصف العاشر',
-        notes: '',
-        sortOrder: 1,
-        createdAt: now.toISOString()
-      },
-      {
-        id: 'item_2_2',
-        weeklyProgramId: 'prog_2',
-        dayDate: '2026-09-29',
-        dayName: 'الثلاثاء',
-        schoolId: 'sch_4',
-        activityId: 'act_7',
-        startTime: '08:30',
-        endTime: '11:00',
-        location: 'غرفة مصادر التعلم',
-        objective: 'تقييم نتائج الاختبار التشخيصي للقرائية والكتابة',
-        notes: 'تنفيذ حصص علاجية للضعاف',
-        sortOrder: 2,
-        createdAt: now.toISOString()
-      }
-    );
-
-    // Mahmoud Horeini (NeedsRevision)
-    weeklyPrograms.push({
-      id: 'prog_3',
-      supervisorId: 'sup_3',
-      academicYearId: 'year_2026_2027',
-      weekId: 'week_1',
-      planType: 'Planning',
-      status: 'NeedsRevision',
-      submittedAt: new Date(now.getTime() - 18 * 3600 * 1000).toISOString(),
-      reviewedAt: new Date(now.getTime() - 6 * 3600 * 1000).toISOString(),
-      reviewedBy: 'مدير قسم الإشراف - يطا',
-      reviewNotes: 'يرجى تعديل برنامج يوم الثلاثاء وإضافة النشاط الإشرافي لمتابعة المعلمين الجدد في مسافر يطا.',
-      createdAt: new Date(now.getTime() - 28 * 3600 * 1000).toISOString()
-    });
-
-    programReviews.push({
-      id: 'rev_2',
-      weeklyProgramId: 'prog_3',
-      reviewerUserId: 'usr_admin',
-      reviewerName: 'مدير قسم الإشراف - يطا',
-      action: 'RequestRevision',
-      notes: 'يرجى تعديل برنامج يوم الثلاثاء وإضافة النشاط الإشرافي لمتابعة المعلمين الجدد في مسافر يطا.',
-      createdAt: new Date(now.getTime() - 6 * 3600 * 1000).toISOString()
-    });
-
-    programItems.push({
-      id: 'item_3_1',
-      weeklyProgramId: 'prog_3',
-      dayDate: '2026-09-28',
-      dayName: 'الإثنين',
-      schoolId: 'sch_1',
-      activityId: 'act_1',
-      startTime: '08:00',
-      endTime: '10:00',
-      location: 'مختبر اللغات',
-      objective: 'متابعة مهارات المحادثة باللغة الإنجليزية',
-      notes: '',
-      sortOrder: 1,
-      createdAt: now.toISOString()
-    });
-
-    // Maryam Abu Aram (Draft)
-    weeklyPrograms.push({
-      id: 'prog_4',
-      supervisorId: 'sup_4',
-      academicYearId: 'year_2026_2027',
-      weekId: 'week_1',
-      planType: 'Planning',
-      status: 'Draft',
-      createdAt: new Date(now.getTime() - 10 * 3600 * 1000).toISOString()
-    });
-
-    programItems.push({
-      id: 'item_4_1',
-      weeklyProgramId: 'prog_4',
-      dayDate: '2026-09-27',
-      dayName: 'الأحد',
-      schoolId: 'sch_6',
-      activityId: 'act_1',
-      startTime: '08:30',
-      endTime: '11:00',
-      location: 'مختبر العلوم',
-      objective: 'تفقد إجراءات السلامة في مختبر العلوم والمواد الكيميائية',
-      notes: 'مسودة قيد الاستكمال',
-      sortOrder: 1,
-      createdAt: now.toISOString()
-    });
 
     this.set(STORAGE_KEYS.WEEKLY_PROGRAMS, weeklyPrograms);
     this.set(STORAGE_KEYS.PROGRAM_ITEMS, programItems);
     this.set(STORAGE_KEYS.PROGRAM_REVIEWS, programReviews);
 
-    // 9. Initial Notifications
-    const notifications: Notification[] = [
-      {
-        id: 'notif_1',
-        userId: 'usr_sup_1',
-        title: 'تم اعتماد البرنامج الأسبوعي',
-        message: 'تم اعتماد برنامجك الأسبوعي للأسبوع الأول بنجاح من قبل مدير القسم.',
-        type: 'success',
-        isRead: false,
-        createdAt: new Date(now.getTime() - 24 * 3600 * 1000).toISOString()
-      },
-      {
-        id: 'notif_2',
-        userId: 'usr_sup_3',
-        title: 'مطلوب تعديل البرنامج الأسبوعي',
-        message: 'يرجى مراجعة وتعديل برنامج الأسبوع الأول: يرجى تعديل برنامج يوم الثلاثاء وإضافة النشاط الإشرافي لمتابعة المعلمين الجدد.',
-        type: 'warning',
-        isRead: false,
-        createdAt: new Date(now.getTime() - 6 * 3600 * 1000).toISOString()
-      },
-      {
-        id: 'notif_3',
-        userId: 'usr_sup_5',
-        title: 'تنبيه موعد إرسال البرنامج',
-        message: 'يرجى العلم بأن فترة إرسال البرنامج الأسبوعي للأسبوع الأول مفتوحة حالياً، نرجو المبادرة بالإرسال قبل انتهاء الموعد.',
-        type: 'info',
-        isRead: false,
-        createdAt: new Date(now.getTime() - 10 * 3600 * 1000).toISOString()
-      }
-    ];
+    // 9. Initial Notifications (Empty)
+    const notifications: Notification[] = [];
     this.set(STORAGE_KEYS.NOTIFICATIONS, notifications);
 
     // 10. Audit Logs
@@ -523,36 +267,33 @@ class StorageService {
         dateTime: new Date(now.getTime() - 24 * 3600 * 1000).toISOString(),
         ip: '192.168.1.15',
         details: 'تم فتح فترة إرسال البرامج للأسبوع الأول حتى ' + closeDate
-      },
-      {
-        id: 'log_3',
-        userId: 'usr_sup_1',
-        username: 'ahmad.najjar',
-        userFullName: 'د. أحمد خليل النجار',
-        action: 'إرسال برنامج',
-        entity: 'WeeklyProgram',
-        entityId: 'prog_1',
-        dateTime: new Date(now.getTime() - 48 * 3600 * 1000).toISOString(),
-        ip: '192.168.1.34',
-        details: 'تم إرسال البرنامج الأسبوعي للأسبوع الأول بنجاح (3 أنشطة).'
-      },
-      {
-        id: 'log_4',
-        userId: 'usr_admin',
-        username: 'admin',
-        userFullName: 'مدير قسم الإشراف - يطا',
-        action: 'اعتماد برنامج',
-        entity: 'WeeklyProgram',
-        entityId: 'prog_1',
-        dateTime: new Date(now.getTime() - 24 * 3600 * 1000).toISOString(),
-        ip: '192.168.1.15',
-        details: 'تم اعتماد برنامج المشرف د. أحمد خليل النجار للأسبوع الأول.'
       }
     ];
     this.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
 
     localStorage.setItem('wsp_initialized', 'true');
-    localStorage.setItem('wsp_version_sep_v1', '1');
+    localStorage.setItem('wsp_version_empty_sups_v1', '1');
+  }
+
+  /**
+   * إفراغ قاعدة البيانات من جميع المشرفين والبرامج المرتبطة بهم
+   */
+  public clearAllSupervisorsData(): void {
+    // Keep only Administrator in users
+    const users = this.getUsers().filter(u => u.role === 'Administrator');
+    this.set(STORAGE_KEYS.USERS, users);
+    this.set(STORAGE_KEYS.SUPERVISORS, []);
+    this.set(STORAGE_KEYS.WEEKLY_PROGRAMS, []);
+    this.set(STORAGE_KEYS.PROGRAM_ITEMS, []);
+    this.set(STORAGE_KEYS.PROGRAM_REVIEWS, []);
+    this.set(STORAGE_KEYS.NOTIFICATIONS, []);
+
+    // Clean password hashes keeping only admin
+    const hashes = this.get<Record<string, string>>(STORAGE_KEYS.PASSWORD_HASHES, {});
+    const adminHash = hashes['admin'];
+    this.set(STORAGE_KEYS.PASSWORD_HASHES, adminHash ? { admin: adminHash } : {});
+
+    this.addAuditLog('ADMIN', 'usr_admin', 'إفراغ المشرفين', 'Supervisors', 'all', 'تم إفراغ قاعدة البيانات من جميع المشرفين وبرامجهم');
   }
 
   // --- Auth & Session ---
@@ -790,6 +531,152 @@ class StorageService {
     }
 
     this.set(STORAGE_KEYS.SUPERVISORS, supervisors);
+  }
+
+  public async importSupervisorsBatch(
+    items: Array<{
+      name: string;
+      nationalId: string;
+      specialization: string;
+      department?: string;
+      phone?: string;
+      email?: string;
+      username?: string;
+      password?: string;
+    }>,
+    mode: 'append' | 'replace' = 'append'
+  ): Promise<{ importedCount: number; errors: string[] }> {
+    const errors: string[] = [];
+    let currentSupervisors = mode === 'replace' ? [] : this.getSupervisors();
+    let currentUsers = mode === 'replace' 
+      ? this.getUsers().filter(u => u.role === 'Administrator') 
+      : this.getUsers();
+    const hashes = this.get<Record<string, string>>(STORAGE_KEYS.PASSWORD_HASHES, {});
+
+    if (mode === 'replace') {
+      // Keep only admin password hash
+      const adminHash = hashes['admin'];
+      this.set(STORAGE_KEYS.PASSWORD_HASHES, adminHash ? { admin: adminHash } : {});
+      this.set(STORAGE_KEYS.WEEKLY_PROGRAMS, []);
+      this.set(STORAGE_KEYS.PROGRAM_ITEMS, []);
+      this.set(STORAGE_KEYS.PROGRAM_REVIEWS, []);
+    }
+
+    let successCount = 0;
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const rowNum = i + 1;
+
+      if (!item.name || !item.name.trim()) {
+        errors.push(`السطر ${rowNum}: اسم المشرف مطلوب وتم تجاوزه.`);
+        continue;
+      }
+
+      const cleanName = item.name.trim();
+      const cleanNationalId = (item.nationalId || '').toString().trim() || `${Date.now()}${i}`;
+      const cleanSpec = (item.specialization || '').trim() || 'عام';
+      const cleanDept = (item.department || '').trim() || 'الإشراف والتأهيل التربوي';
+      const cleanPhone = (item.phone || '').toString().trim();
+      const cleanEmail = (item.email || '').toString().trim();
+      
+      // Determine username:
+      let baseUsername = (item.username || '').toString().trim().toLowerCase();
+      if (!baseUsername) {
+        // Fallback username: sup_ + nationalId (last 6 digits) or index
+        const cleanNat = cleanNationalId.replace(/[^0-9a-zA-Z]/g, '');
+        baseUsername = cleanNat ? `sup_${cleanNat.slice(-6)}` : `sup_${Date.now()}_${i}`;
+      }
+      baseUsername = baseUsername.replace(/[\s\t\n]+/g, '_');
+
+      // Ensure unique username
+      let finalUsername = baseUsername;
+      let counter = 1;
+      while (currentUsers.some(u => u.username.toLowerCase() === finalUsername.toLowerCase())) {
+        finalUsername = `${baseUsername}_${counter}`;
+        counter++;
+      }
+
+      // Check if supervisor with same nationalId or name already exists in current list
+      const existingSupIndex = currentSupervisors.findIndex(
+        s => (s.nationalId && s.nationalId === cleanNationalId) || s.name === cleanName
+      );
+
+      const plainPassword = item.password?.trim() || '123456';
+      const hashedPassword = await hashPassword(plainPassword);
+
+      if (existingSupIndex >= 0) {
+        // Update existing supervisor
+        const existingSup = currentSupervisors[existingSupIndex];
+        existingSup.name = cleanName;
+        existingSup.nationalId = cleanNationalId;
+        existingSup.specialization = cleanSpec;
+        existingSup.department = cleanDept;
+        if (cleanPhone) existingSup.phone = cleanPhone;
+        if (cleanEmail) existingSup.email = cleanEmail;
+
+        // Update linked user
+        const linkedUser = currentUsers.find(u => u.id === existingSup.userId);
+        if (linkedUser) {
+          linkedUser.fullName = cleanName;
+          linkedUser.email = cleanEmail;
+          hashes[linkedUser.username] = hashedPassword;
+        }
+        successCount++;
+      } else {
+        // Create new supervisor & linked user
+        const supId = `sup_${Date.now()}_${i}`;
+        const userId = `usr_${supId}`;
+
+        const newSup: Supervisor = {
+          id: supId,
+          name: cleanName,
+          nationalId: cleanNationalId,
+          specialization: cleanSpec,
+          department: cleanDept,
+          phone: cleanPhone,
+          email: cleanEmail,
+          userId,
+          status: 'Active',
+          createdAt: now
+        };
+
+        const newUser: User = {
+          id: userId,
+          username: finalUsername,
+          fullName: cleanName,
+          email: cleanEmail,
+          role: 'Supervisor',
+          supervisorId: supId,
+          isActive: true,
+          mustChangePassword: true,
+          failedLoginAttempts: 0,
+          createdAt: now,
+          permissions: ['ViewDashboard', 'ViewPrograms']
+        };
+
+        currentSupervisors.push(newSup);
+        currentUsers.push(newUser);
+        hashes[finalUsername] = hashedPassword;
+        successCount++;
+      }
+    }
+
+    this.set(STORAGE_KEYS.SUPERVISORS, currentSupervisors);
+    this.set(STORAGE_KEYS.USERS, currentUsers);
+    this.set(STORAGE_KEYS.PASSWORD_HASHES, hashes);
+
+    this.addAuditLog(
+      'ADMIN',
+      'admin',
+      'استيراد مشرفين',
+      'Supervisors',
+      'batch',
+      `تم استيراد ${successCount} مشرف بنجاح (الوضع: ${mode === 'replace' ? 'استبدال' : 'إضافة'}).`
+    );
+
+    return { importedCount: successCount, errors };
   }
 
   // --- Academic Years ---
