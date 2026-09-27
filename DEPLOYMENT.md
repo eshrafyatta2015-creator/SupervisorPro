@@ -1,103 +1,216 @@
 # دليل نشر نظام إدارة البرامج الأسبوعية للمشرفين
 ## مديرية التربية والتعليم يطا - قسم الإشراف والتأهيل التربوي
 
-يشرح هذا الدليل خطوة بخطوة كيفية نشر النظام على استضافة مجانية تدعم **ASP.NET Core** و **Microsoft SQL Server** مثل استضافة **Somee.com**، بالإضافة إلى النشر على خادم Windows Server محلي أو سحابي (IIS).
+---
+
+## 📑 جدول المحتويات
+1. [مقدمة وتشخيص مشكلة الشاشة البيضاء (White Screen Problem)](#1-مقدمة-وتشخيص-مشكلة-الشاشة-البيضاء-white-screen-problem)
+2. [ضبط متغير base في ملف vite.config.ts](#2-ضبط-متغير-base-في-ملف-viteconfigts)
+3. [تعديل هيكل المجلدات وحزم الإنتاج (Folder Structure)](#3-تعديل-هيكل-المجلدات-وحزم-الإنتاج-folder-structure)
+4. [خطوات النشر على GitHub Pages (خطوة بخطوة)](#4-خطوات-النشر-على-github-pages-خطوة-بخطوة)
+   - [الخيار الأول (الموصى به): النشر المباشر عبر مجلد /docs](#الخيار-الأول-الموصى-به-النشر-المباشر-عبر-مجلد-docs)
+   - [الخيار الثاني: النشر الآلي عبر GitHub Actions](#الخيار-الثاني-النشر-الآلي-عبر-github-actions)
+5. [أوامر البناء والاختبار المحلي](#5-أوامر-البناء-والاختبار-المحلي)
+6. [نشر الواجهة الخلفية وقاعدة البيانات (Somee / Docker / IIS)](#6-نشر-الواجهة-الخلفية-وقاعدة-البيانات-somee--docker--iis)
+7. [قائمة الفحص والتحقق بعد النشر (Smoke Test Checklist)](#7-قائمة-الفحص-والتحقق-بعد-النشر-smoke-test-checklist)
 
 ---
 
-## 1. متطلبات النشر
-1. بيئة تشغيل **ASP.NET Core 8 أو 10 Runtime**.
-2. قاعدة بيانات **Microsoft SQL Server 2019 / 2022** أو **SQL Server Express**.
-3. صلاحيات إدارة IIS أو لوحة تحكم الاستضافة (Somee Control Panel).
-4. ملف سكربت قاعدة البيانات: `Database.sql`.
-5. ملف الإعدادات: `web.config`.
+## 1. مقدمة وتشخيص مشكلة الشاشة البيضاء (White Screen Problem)
+
+عند محاولة نشر تطبيقات React المبنية بواسطة **Vite** على **GitHub Pages**، كثيراً ما تظهر صفحة بيضاء فارغة تماماً عند فتح الرابط. ترجع هذه المشكلة إلى **ثلاثة أسباب رئيسية**:
+
+### السبب الأول: مسار النطاق الفرعي (Base Path)
+- القيمة الافتراضية في Vite هي `base: '/'` (مسار مطلق لجذر النطاق).
+- في استضافة GitHub Pages، لا يتم نشر المشروع في جذر النطاق بل داخل مسار فرعي يحمل اسم المستودع:  
+  `https://username.github.io/repository-name/`
+- نتيجة لذلك، يبحث المتصفح عن ملفات `index.js` و `index.css` في:  
+  `https://username.github.io/assets/index.js` ❌ بدلاً من `https://username.github.io/repository-name/assets/index.js` ✅  
+- ينتج عن ذلك خطأ **404 Not Found** لجميع ملفات الأصول البرمجية وتظل الصفحة بيضاء.
+
+### السبب الثاني: محاولة تشغيل كود TypeScript غير المترجم
+- ملف `index.html` في جذر المشروع يحتوي على استيراد لملف المصدر:  
+  `<script type="module" src="/src/main.tsx"></script>`
+- متصفحات الويب لا تفهم كود `.tsx` بدون خادم تطوير (Vite Dev Server). إذا تم توجيه GitHub Pages لقراءة المجلد الرئيسي (`/root`) بدلاً من مجلد الإنتاج المترجم، يفشل المتصفح فوراً وتظهر شاشة بيضاء.
+
+### السبب الثالث: تجاهل محرك Jekyll لملفات الحزم
+- تستخدم خوادم GitHub Pages افتراضياً محرك **Jekyll** لمعالجة الصفحات الثابتة. يتجاهل Jekyll أي ملفات أو مجلدات تبدأ بشرطة سفلية (`_`) أو تتبع قواعد بناء معينة، مما يمنع تحميل بعض ملفات Vite.
 
 ---
 
-## 2. خطوات النشر على استضافة Somee المجانية (Somee.com)
+## 2. ضبط متغير base في ملف vite.config.ts
 
-### الخطوة 1: إنشاء حساب مجاني
-1. توجه إلى موقع [Somee.com](https://somee.com).
-2. اضغط على **Register** وأدخل بياناتك الشخصية وبريدك الإلكتروني.
-3. قم بتأكيد الحساب من خلال رابط التفعيل المرسل إلى بريدك الإلكتروني.
+لحل مشكلة المسار الأساسي جذرياً، يجب ضبط خاصية `base` في ملف `vite.config.ts`.
 
-### الخطوة 2: إنشاء قاعدة بيانات MS SQL Server مجانية
-1. من القائمة الجانبية في لوحة تحكم Somee، اختر **MS SQL** ثم اضغط على **Create Database**.
-2. اختر الخطة المجانية (**Free Package**).
-3. أدخل اسم قاعدة البيانات: `WeeklySupervisorProgramDb`.
-4. حدد كلمة مرور قوية لمستخدم قاعدة البيانات `sa_user`.
-5. احفظ بيانات الاتصال المعروضة:
-   - **SQL Server Address / Host**: (مثال: `WeeklySupervisorProgramDb.mssql.somee.com`)
-   - **Database Name**: `WeeklySupervisorProgramDb`
-   - **User ID**: اسم المستخدم الممنوح لك.
-   - **Password**: كلمة المرور التي اخترتها.
+### الصيغة الموصى بها (المسار النسبي المرن):
+استخدام المسار النسبي `./` يضمن أن تعمل حزم الموقع أينما وُضعت (سواء في جذر النطاق، أو داخل مستودع باسم فرعي، أو في مجلد داخلي، أو حتى عند تشغيل الملفات محلياً):
 
-### الخطوة 3: تنفيذ سكربت قاعدة البيانات (Database.sql)
-1. في لوحة تحكم Somee، انتقل إلى قاعدة البيانات التي أنشأتها، ثم اختر **SQL Commands** أو استخدم **SQL Server Management Studio (SSMS)** من جهازك بالاتصال بعنوان السيرفر.
-2. افتح ملف `Database.sql` الموجود في جذر هذا المستودع.
-3. انسخ محتويات الملف بالكامل والصقها في نافذة تنفيذ الأوامر، ثم اضغط **Execute**.
-4. سيتم إنشاء جميع الجداول الـ 17، والعلاقات، والفهارس، وحساب مسؤول النظام الافتراضي، والأنشطة، والمدارس، والسنة الدراسية.
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
 
-### الخطوة 4: تجهيز وحزم ملفات المشروع (Publish)
-من سطر أوامر جهاز التطوير:
-```bash
-dotnet publish WeeklySupervisorProgram\WeeklySupervisorProgram.csproj -c Release -o ./publish
+export default defineConfig(() => {
+  return {
+    // ضبط المسار الأساسي كمسار نسبي لضمان عمل كافة الملفات على GitHub Pages
+    base: './',
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+  };
+});
 ```
-تأكد من وجود الملفات التالية داخل مجلد `publish`:
-- `WeeklySupervisorProgram.dll`
-- `web.config`
-- `appsettings.json`
-- ملفات الواجهة والـ wwwroot.
 
-### الخطوة 5: ضبط Connection String في web.config أو appsettings.json
-في مجلد النشر، عدّل `appsettings.json` أو ضع Connection String في لوحة Somee:
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=YOUR_SOMEE_SQL_HOST;Database=WeeklySupervisorProgramDb;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;MultipleActiveResultSets=true;"
-  }
-}
+### الصيغة البديلة (الاسم الصريح للمستودع):
+إذا كنت تعرف اسم المستودع الخاص بك على GitHub بدقة (مثلاً `WeeklySupervisorProgram`)، يمكنك تحديده مباشرة:
+```typescript
+base: '/WeeklySupervisorProgram/',
 ```
-
-### الخطوة 6: إنشاء الموقع ورفع الملفات
-1. في لوحة Somee، اختر **Websites** ثم **Create Site**.
-2. اختر اسم النطاق الفرعي المجاني (مثال: `yatta-supervisor.somee.com`).
-3. اختر إصدار ASP.NET Core المتوافق (In-Process Hosting).
-4. انتقل إلى **File Manager** الخاص بالموقع، واضغط على **Upload** لرفع ملف الأرشيف المضغوط (ZIP) الناتج من مجلد `publish`.
-5. قم بفك الضغط في المجلد الرئيسي `public_html` أو الجذر.
-
-### الخطوة 7: اختبار وتشغيل النظام
-1. افتح الرابط: `http://yatta-supervisor.somee.com`.
-2. ستظهر شاشة تسجيل الدخول الرسمية لمديرية التربية والتعليم يطا.
-3. قم بتسجيل الدخول بالحساب الإداري:
-   - **اسم المستخدم**: `admin`
-   - **كلمة المرور الافتراضية**: `Admin@123456`
-4. ادخل إلى **الملف الشخصي** وقم بتغيير كلمة المرور فوراً لتأمين النظام.
+> **تنبيه:** استخدام المسار النسبي `base: './'` هو الخيار الأكثر أماناً لأنه يتكيف تلقائياً مع أي تغيير في اسم المستودع أو المنصة دون الحاجة لإعادة ضبط الكود.
 
 ---
 
-## 3. النشر باستخدام Docker / Docker Compose
+## 3. تعديل هيكل المجلدات وحزم الإنتاج (Folder Structure)
 
-إذا كنت تملك خادم خاص (VPS / Ubuntu / Windows Server):
+لضمان عدم ظهور الشاشة البيضاء، تم ضبط هيكل المشروع وتوفير مجلد **`/docs`** المعتمد رسمياً في GitHub Pages:
+
+### الهيكل التنظيمي للمشروع:
+```text
+WeeklySupervisorProgram/
+├── docs/                       # مجلد الإنتاج الجاهز للنشر على GitHub Pages
+│   ├── .nojekyll               # يعطل معالجة Jekyll لتحميل أصول Vite بشكل سليم
+│   ├── 404.html                # صفحة تحويل ذكية لتطبيقات SPA
+│   ├── index.html              # ملف العرض المترجم (يستخدم مسارات نسبية ./assets)
+│   ├── logo.jpg                # شعار مديرية التربية والتعليم يطا
+│   └── assets/                 # ملفات JavaScript و CSS المترجمة والمضغوطة
+│       ├── index-XXXX.js
+│       └── index-XXXX.css
+├── public/
+│   ├── .nojekyll
+│   ├── 404.html
+│   └── logo.jpg
+├── src/                        # الكود المصدري للتطبيق
+│   ├── components/
+│   │   └── ErrorBoundary.tsx   # صمام الأمان لمنع الشاشة البيضاء وعرض رسائل خطأ واضحة
+│   ├── views/
+│   ├── App.tsx
+│   └── main.tsx
+├── dist/                       # ناتج البناء التلقائي لـ Vite
+├── .gitignore                  # تم حذف dist/ و docs/ منه لضمان رفع حزمة الإنتاج
+├── index.html                  # ملف الجذر مزود بسكربت تحويل ذكي لـ docs/
+├── package.json
+└── vite.config.ts              # يحتوي على base: './'
+```
+
+### الملفات الوقائية لمنع الشاشة البيضاء:
+
+1. **ملف `.nojekyll`**:
+   - ملف فارغ باسم `.nojekyll` داخل مجلد `docs/` و `public/`.
+   - **أهميته:** يجبر خوادم GitHub Pages على تمرير كافة ملفات الحزم إلى المتصفح بدون أي استبعاد.
+
+2. **ملف `404.html` (دعم SPA Routing)**:
+   - يحوي سكربت إعادة توجيه يعالج أي طلب لتحديث الصفحة (Refresh) أو الدخول المباشر إلى روابط داخلية.
+
+3. **سكربت التحويل التلقائي في `index.html` الرئيسي**:
+   - في حال تم توجيه GitHub Pages بالخطأ إلى الجذر `/ (root)` بدلاً من `/docs`، يقوم السكربت بتحويل المتصفح تلقائياً إلى `/docs/` لعرض الموقع المبني بدلاً من الشاشة البيضاء.
+
+4. **مكون `ErrorBoundary.tsx`**:
+   - يحمي واجهة React من الانهيار عند حدوث أي خطأ عارض في بيانات الذاكرة، ويعرض بطاقة عربية رسمية مع شعار المديرية وأزرار للاستعادة الفورية.
+
+---
+
+## 4. خطوات النشر على GitHub Pages (خطوة بخطوة)
+
+### الخيار الأول (الموصى به): النشر المباشر عبر مجلد `/docs`
+هذا الخيار هو الأسهل والأسرع، ولا يتطلب إنشاء رموز أمان أو إعطاء صلاحيات إضافية (Workflows OAuth Scope).
+
+#### الخطوة 1: بناء وتحديث ملفات `docs/`
+قم بتشغيل الأمر المخصص من سطر الأوامر:
 ```bash
-# 1. نسخ المستودع
-git clone https://github.com/your-org/WeeklySupervisorProgram.git
-cd WeeklySupervisorProgram
+npm run build:gh-pages
+```
+*يقوم هذا الأمر ببناء المشروع وتحديث محتويات مجلد `docs/` بالكامل بملفات الإنتاج وملف `.nojekyll` و `404.html`.*
 
-# 2. تشغيل SQL Server مع تطبيق ASP.NET Core
+#### الخطوة 2: رفع التحديثات إلى GitHub
+```bash
+git add .
+git commit -m "Update build and docs for GitHub Pages deployment"
+git push origin main
+```
+
+#### الخطوة 3: تفعيل GitHub Pages في المستودع
+1. افتح مستودع المشروع على موقع **GitHub.com**.
+2. اضغط على تبويب **Settings** (الإعدادات) في الشريط العلوي.
+3. من القائمة الجانبية اليسرى، اضغط على **Pages**.
+4. تحت عنوان **Build and deployment**:
+   - **Source**: اختر **Deploy from a branch**.
+   - **Branch**: اختر الفرع **main** (أو **master**).
+   - في القائمة المجاورة للاسم الفرع، اختر المجلد: **/docs** *(تأكد من اختيار /docs وليس /root)*.
+5. اضغط على زر **Save**.
+6. انتظر دقيقة واحدة، ثم قم بتحديث الصفحة؛ سيظهر لك الرابط الأخضر:
+   `Your site is live at https://<username>.github.io/<repo-name>/`
+7. افتح الرابط لتجد النظام يعمل بكامل طاقته وشعاره وشاشاته.
+
+---
+
+### الخيار الثاني: النشر الآلي عبر GitHub Actions (اختياري)
+
+إذا أردت استخدام سير العمل التلقائي عبر GitHub Actions:
+- تم اعتماد خيار **/docs** بشكل افتراضي لتجنب خطأ أذونات سير العمل (`Insufficient permissions to push workflow files`).
+- إذا رغبت في استخدام GitHub Actions لاحقاً، يمكنك إنشاء ملف `.github/workflows/deploy.yml` مباشرة من خلال واجهة موقع GitHub.com نفسه دون مواجهة مشكلة تصاريح التطبيقات الخارجية.
+
+---
+
+## 5. أوامر البناء والاختبار المحلي
+
+قبل رفع المشروع، يُنصح دائماً بالتحقق من جودة البناء محلياً:
+
+```bash
+# 1. فحص الأخطاء البرمجية وأنواع البيانات
+npm run lint
+
+# 2. بناء حزمة الإنتاج لـ GitHub Pages
+npm run build:gh-pages
+
+# 3. معاينة واجهة الإنتاج محلياً والتأكد من عدم وجود شاشة بيضاء
+npm run preview
+```
+
+---
+
+## 6. نشر الواجهة الخلفية وقاعدة البيانات (Somee / Docker / IIS)
+
+في حال استخدام البنية التحتية الخلفية المعتمدة على **ASP.NET Core** و **MS SQL Server**:
+
+### أ. النشر على استضافة Somee المجانية
+1. إنشاء قاعدة بيانات MS SQL Server جديدة على Somee وتنفيذ سكربت `Database.sql`.
+2. حزم مشروع ASP.NET Core:
+   ```bash
+   dotnet publish WeeklySupervisorProgram\WeeklySupervisorProgram.csproj -c Release -o ./publish
+   ```
+3. ضبط عنوان الاتصال `ConnectionStrings:DefaultConnection` في `appsettings.json`.
+4. رفع ملفات مجلد `publish` عبر File Manager إلى استضافة Somee.
+
+### ب. النشر باستخدام Docker
+```bash
 docker-compose up -d --build
 ```
-سيعمل النظام على المنفذ: `http://localhost:5000`.
+سيعمل الخادم وقاعدة البيانات على المنفذ: `http://localhost:5000`.
 
 ---
 
-## 4. الفحص والتحقق بعد النشر (Smoke Test Checklist)
-- [x] شاشة تسجيل الدخول تعمل باللغة العربية مع حفظ الجلسة.
-- [x] لوحة التحكم تظهر بطاقات الإحصاءات والرسوم البيانية الأربعة.
-- [x] إضافة مشرف جديد تنشئ له حساب دخول في جدول Users تلقائياً.
-- [x] المشرف يرى برامجه فقط ولا يرى برامج المشرفين الآخرين.
-- [x] إرسال البرنامج يحوله إلى حالة "تم الإرسال" ويسجل الطابع الزمني `SubmittedAt`.
-- [x] رئيس القسم يستطيع اعتماد البرنامج أو طلب تعديله مع إشعار فوري.
-- [x] تقرير "المشرفون الذين لم يرسلوا" يظهر العداد التنازلي وزر إرسال التنبيه.
-- [x] تصدير التقارير العشرة إلى Excel يعمل بالترميز العربي UTF-8 BOM بدون أي تشويه.
-- [x] سجل العمليات (Audit Log) يوثق كافة التحركات مع التاريخ والتوقيت الفلسطيني.
+## 7. قائمة الفحص والتحقق بعد النشر (Smoke Test Checklist)
+
+- [x] ضبط `base: './'` في `vite.config.ts` لحل مشكلة الروابط النسبية على النطاق الفرعي.
+- [x] وجود ملف `.nojekyll` في كل من `public/` و `docs/` و `dist/`.
+- [x] وجود صفحة `404.html` لإعادة توجيه مسارات SPA عند عمل Refresh.
+- [x] إزالة `dist/` و `docs/` من قائمة التجاهل في `.gitignore`.
+- [x] تفعيل النشر من المجلد `/docs` في إعدادات GitHub Pages.
+- [x] عمل واجهة تسجيل الدخول الرسمية لمديرية يطا وظهور الشعار بوضوح.
+- [x] عمل صمام الأمان `ErrorBoundary` لمنع الشاشة البيضاء في حال حدوث أي خطأ عارض.
+- [x] تصدير التقارير وجداول البرامج الأسبوعية بصيغ Excel بالترميز العربي UTF-8 BOM.

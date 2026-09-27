@@ -3,6 +3,7 @@ import { Lock, User, Eye, EyeOff, ShieldCheck, HelpCircle } from 'lucide-react';
 import { storage } from '../services/storage';
 import { User as UserModel } from '../types';
 import { Modal } from '../components/Modal';
+import { YATTA_LOGO } from '../assets/logo';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserModel) => void;
@@ -57,7 +58,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-20 h-20 rounded-full overflow-hidden p-1 bg-white shadow-md border-2 border-emerald-600/30 mb-4">
             <img
-              src="/src/assets/images/yatta_education_logo_1790448667179.jpg"
+              src={YATTA_LOGO}
               alt="شعار مديرية التربية والتعليم يطا"
               className="w-full h-full object-cover rounded-full"
               onError={(e) => {

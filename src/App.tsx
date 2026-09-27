@@ -20,6 +20,7 @@ import { AuditLogsView } from './views/AuditLogsView';
 import { SettingsView } from './views/SettingsView';
 import { ProfileView } from './views/ProfileView';
 import { ErrorView } from './views/ErrorView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -143,139 +144,173 @@ export default function App() {
 
         {/* Viewport */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-y-auto">
-          {isUnauthorized ? (
-            <ErrorView
-              code={403}
-              message="عذراً، هذه الشاشة مخصصة لرئيس قسم الإشراف ومسؤول النظام فقط."
-              onGoBack={() => setActiveView('dashboard')}
-            />
-          ) : (
-            <>
-              {activeView === 'dashboard' && (
-                <DashboardView
-                  currentUser={currentUser}
-                  onNavigate={(view) => setActiveView(view)}
-                />
-              )}
-
-              {(activeView === 'my-program' || activeView === 'previous-programs') && (
-                <WeeklyProgramView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'program-review' && (
-                <ProgramReviewView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'unsubmitted-report' && (
-                <UnsubmittedReportView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'supervisors' && (
-                <SupervisorsView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                  onNavigate={(view) => setActiveView(view)}
-                />
-              )}
-
-              {activeView === 'schools' && (
-                <SchoolsView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'activities' && (
-                <ActivitiesView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'weeks' && (
-                <WeeksManagementView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'academic-years' && (
-                <AcademicYearsView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'reports' && (
-                <ReportsView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'users' && (
-                <UsersView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'audit-logs' && (
-                <AuditLogsView />
-              )}
-
-              {activeView === 'settings' && (
-                <SettingsView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                  onRefreshData={() => {
-                    // re-trigger render
-                    setCurrentUser(storage.getCurrentUser());
-                  }}
-                />
-              )}
-
-              {activeView === 'profile' && (
-                <ProfileView
-                  currentUser={currentUser}
-                  onShowToast={showToast}
-                />
-              )}
-
-              {activeView === 'notifications' && (
-                <div className="space-y-4 max-w-4xl mx-auto">
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-                    <h1 className="text-xl font-black text-slate-900">سجل الإشعارات والتنبيهات</h1>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      جميع التنبيهات الإدارية المتعلقة بفتح وإغلاق البرامج واعتمادها وطلبات التعديل.
-                    </p>
-                  </div>
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-xs divide-y divide-slate-100 p-2">
-                    {storage.getNotifications(currentUser.id).map(notif => (
-                      <div key={notif.id} className="p-4 hover:bg-slate-50 rounded-xl transition-colors">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-bold text-slate-900">{notif.title}</h4>
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(notif.createdAt).toLocaleDateString('ar-PS')}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">{notif.message}</p>
-                      </div>
-                    ))}
-                  </div>
+          <ErrorBoundary
+            key={activeView}
+            onReset={() => setActiveView('dashboard')}
+            fallback={
+              <div className="bg-white rounded-3xl p-8 max-w-lg mx-auto text-center border border-slate-200 shadow-sm mt-8">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3 border border-amber-200">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
                 </div>
-              )}
-            </>
-          )}
+                <h3 className="text-base font-bold text-slate-900 mb-1">تعذر تحميل محتوى هذه الشاشة</h3>
+                <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                  حدث خطأ غير متوقع أثناء عرض هذا القسم. يمكنك العودة إلى لوحة التحكم أو إعادة المحاولة.
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('dashboard')}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors"
+                  >
+                    العودة للوحة التحكم
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+                  >
+                    تحديث الصفحة
+                  </button>
+                </div>
+              </div>
+            }
+          >
+            {isUnauthorized ? (
+              <ErrorView
+                code={403}
+                message="عذراً، هذه الشاشة مخصصة لرئيس قسم الإشراف ومسؤول النظام فقط."
+                onGoBack={() => setActiveView('dashboard')}
+              />
+            ) : (
+              <>
+                {activeView === 'dashboard' && (
+                  <DashboardView
+                    currentUser={currentUser}
+                    onNavigate={(view) => setActiveView(view)}
+                  />
+                )}
+
+                {(activeView === 'my-program' || activeView === 'previous-programs') && (
+                  <WeeklyProgramView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'program-review' && (
+                  <ProgramReviewView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'unsubmitted-report' && (
+                  <UnsubmittedReportView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'supervisors' && (
+                  <SupervisorsView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                    onNavigate={(view) => setActiveView(view)}
+                  />
+                )}
+
+                {activeView === 'schools' && (
+                  <SchoolsView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'activities' && (
+                  <ActivitiesView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'weeks' && (
+                  <WeeksManagementView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'academic-years' && (
+                  <AcademicYearsView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'reports' && (
+                  <ReportsView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'users' && (
+                  <UsersView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'audit-logs' && (
+                  <AuditLogsView />
+                )}
+
+                {activeView === 'settings' && (
+                  <SettingsView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                    onRefreshData={() => {
+                      // re-trigger render
+                      setCurrentUser(storage.getCurrentUser());
+                    }}
+                  />
+                )}
+
+                {activeView === 'profile' && (
+                  <ProfileView
+                    currentUser={currentUser}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {activeView === 'notifications' && (
+                  <div className="space-y-4 max-w-4xl mx-auto">
+                    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                      <h1 className="text-xl font-black text-slate-900">سجل الإشعارات والتنبيهات</h1>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        جميع التنبيهات الإدارية المتعلقة بفتح وإغلاق البرامج واعتمادها وطلبات التعديل.
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs divide-y divide-slate-100 p-2">
+                      {storage.getNotifications(currentUser.id).map(notif => (
+                        <div key={notif.id} className="p-4 hover:bg-slate-50 rounded-xl transition-colors">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold text-slate-900">{notif.title}</h4>
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(notif.createdAt).toLocaleDateString('ar-PS')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-1 leading-relaxed">{notif.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </ErrorBoundary>
         </main>
       </div>
 

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { User, Notification } from '../types';
 import { storage } from '../services/storage';
+import { YATTA_LOGO } from '../assets/logo';
 
 interface HeaderProps {
   currentUser: User;
@@ -107,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Brand & Directorate Identity */}
           <div className="flex items-center gap-3.5">
             <img
-              src="/src/assets/images/yatta_education_logo_1790448667179.jpg"
+              src={YATTA_LOGO}
               alt="شعار مديرية التربية والتعليم يطا"
               className="w-11 h-11 rounded-full object-cover shadow-xs border border-emerald-600/30"
               onError={(e) => {

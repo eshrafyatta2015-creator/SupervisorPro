@@ -90,7 +90,7 @@ class StorageService {
       directorateName: 'مديرية التربية والتعليم يطا',
       departmentName: 'قسم الإشراف والتأهيل التربوي',
       systemTitle: 'نظام إدارة البرامج الأسبوعية للمشرفين',
-      logoUrl: '/src/assets/images/yatta_education_logo_1790448667179.jpg',
+      logoUrl: './logo.jpg',
       currentAcademicYearId: 'year_2026_2027',
       weekDaysCount: 5,
       alertThresholdHours: 24,
