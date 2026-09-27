@@ -13,15 +13,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
-      // إذا تم فتح المستودع عبر GitHub Pages مباشرة من المجلد الرئيسي بدون بناء محلي
+      // تحويل تلقائي ذكي: يعمل فقط إذا تم تشغيل الملف المصدري غير المترجم عبر جذر GitHub Pages
       (function() {
-        var isGitHubPages = location.hostname.endsWith('github.io') || location.hostname.includes('pages.dev');
-        if (isGitHubPages) {
-          var p = location.pathname;
-          if (!p.includes('/docs/') && !p.includes('/dist/')) {
-            var basePath = p.endsWith('/') ? p : p + '/';
-            location.replace(basePath + 'docs/');
-          }
+        var isGh = location.hostname.endsWith('github.io') || location.hostname.includes('pages.dev');
+        if (isGh) {
+          window.addEventListener('DOMContentLoaded', function() {
+            var rawScript = document.querySelector('script[src*="/src/main.tsx"]');
+            if (rawScript) {
+              var p = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
+              location.replace(p + 'docs/');
+            }
+          });
         }
       })();
     </script>
