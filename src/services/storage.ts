@@ -13,7 +13,9 @@ import {
   AuditLog,
   Permission,
   ProgramStatus,
-  PlanType
+  PlanType,
+  ProgramSubmissionHistory,
+  ProgramRevisionRequest
 } from '../types';
 import { hashPassword } from '../utils/crypto';
 
@@ -31,7 +33,9 @@ const STORAGE_KEYS = {
   SYSTEM_SETTINGS: 'wsp_system_settings',
   AUDIT_LOGS: 'wsp_audit_logs',
   SESSION: 'wsp_session',
-  PASSWORD_HASHES: 'wsp_password_hashes'
+  PASSWORD_HASHES: 'wsp_password_hashes',
+  PROGRAM_SUBMISSIONS: 'wsp_program_submissions',
+  REVISION_REQUESTS: 'wsp_revision_requests'
 };
 
 const ALL_PERMISSIONS: Permission[] = [
@@ -712,7 +716,17 @@ class StorageService {
 
   // --- Weeks ---
   public getWeeks(): Week[] {
-    return this.get<Week[]>(STORAGE_KEYS.WEEKS, []);
+    const rawWeeks = this.get<Week[]>(STORAGE_KEYS.WEEKS, []);
+    return rawWeeks.map(w => ({
+      ...w,
+      requiredDays: (w.requiredDays && w.requiredDays.length > 0)
+        ? w.requiredDays
+        : ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'],
+      defaultMaxPlanningSubmissions: w.defaultMaxPlanningSubmissions || 1,
+      defaultMaxActualSubmissions: w.defaultMaxActualSubmissions || 1,
+      allowRevisionRequests: w.allowRevisionRequests ?? true,
+      supervisorOverrides: w.supervisorOverrides || {}
+    }));
   }
 
   public getWeekById(id: string): Week | undefined {
@@ -1025,7 +1039,97 @@ class StorageService {
       });
   }
 
-  public submitWeeklyProgram(programId: string, currentUser: User): { success: boolean; error?: string } {
+  // --- Week Submissions & Window Helper Methods ---
+  public getSupervisorMaxSubmissions(week: Week, supervisorId: string, planType: PlanType): number {
+    if (week.supervisorOverrides && week.supervisorOverrides[supervisorId]) {
+      const override = week.supervisorOverrides[supervisorId];
+      if (planType === 'Planning' && typeof override.maxPlanning === 'number' && override.maxPlanning > 0) {
+        return override.maxPlanning;
+      }
+      if (planType === 'Actual' && typeof override.maxActual === 'number' && override.maxActual > 0) {
+        return override.maxActual;
+      }
+    }
+    if (planType === 'Planning') {
+      return week.defaultMaxPlanningSubmissions || 1;
+    } else {
+      return week.defaultMaxActualSubmissions || 1;
+    }
+  }
+
+  public isPlanningWindowOpen(week: Week): { isOpen: boolean; reason?: string } {
+    if (!week.planningOpen) {
+      return { isOpen: false, reason: 'فترة إرسال برنامج التخطيط مغلقة حالياً من قبل المسؤول.' };
+    }
+    const now = new Date().getTime();
+    if (week.planningOpenAt) {
+      const openTime = new Date(week.planningOpenAt).getTime();
+      if (now < openTime) {
+        return { isOpen: false, reason: `فترة إرسال التخطيط تبدأ بتاريخ ${new Date(week.planningOpenAt).toLocaleString('ar-EG')}.` };
+      }
+    }
+    if (week.planningCloseAt) {
+      const closeTime = new Date(week.planningCloseAt).getTime();
+      if (now > closeTime) {
+        return { isOpen: false, reason: 'انتهت فترة إرسال برنامج التخطيط المحددة من قبل المسؤول.' };
+      }
+    }
+    return { isOpen: true };
+  }
+
+  public isActualWindowOpen(week: Week): { isOpen: boolean; reason?: string } {
+    if (!week.actualOpen) {
+      return { isOpen: false, reason: 'فترة إرسال البرنامج الفعلي مغلقة حالياً من قبل المسؤول.' };
+    }
+    const now = new Date().getTime();
+    if (week.actualOpenAt) {
+      const openTime = new Date(week.actualOpenAt).getTime();
+      if (now < openTime) {
+        return { isOpen: false, reason: `فترة إرسال البرنامج الفعلي تبدأ بتاريخ ${new Date(week.actualOpenAt).toLocaleString('ar-EG')}.` };
+      }
+    }
+    if (week.actualCloseAt) {
+      const closeTime = new Date(week.actualCloseAt).getTime();
+      if (now > closeTime) {
+        return { isOpen: false, reason: 'انتهت فترة إرسال البرنامج الفعلي المحددة من قبل المسؤول.' };
+      }
+    }
+    return { isOpen: true };
+  }
+
+  public validateProgramBeforeSubmit(programId: string, week: Week): { valid: boolean; missingDays: string[]; error?: string } {
+    const program = this.getProgramById(programId);
+    if (!program) return { valid: false, missingDays: [], error: 'البرنامج غير موجود.' };
+
+    const items = this.getProgramItems(programId);
+    const requiredDays = (week.requiredDays && week.requiredDays.length > 0)
+      ? week.requiredDays
+      : ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+
+    const missingDays: string[] = [];
+    for (const day of requiredDays) {
+      const hasItem = items.some(item =>
+        (item.dayOfWeek === day || item.dayName === day) &&
+        item.schoolId &&
+        item.activityId
+      );
+      if (!hasItem) {
+        missingDays.push(day);
+      }
+    }
+
+    if (missingDays.length > 0) {
+      return {
+        valid: false,
+        missingDays,
+        error: `لا يمكن إرسال البرنامج، يرجى استكمال بيانات جميع الأيام المحددة من قبل المسؤول (${missingDays.join('، ')}).`
+      };
+    }
+
+    return { valid: true, missingDays: [] };
+  }
+
+  public submitWeeklyProgram(programId: string, currentUser: User, submitNotes?: string): { success: boolean; error?: string } {
     const program = this.getProgramById(programId);
     if (!program) return { success: false, error: 'البرنامج غير موجود.' };
 
@@ -1033,27 +1137,82 @@ class StorageService {
       return { success: false, error: 'غير مصرح لك بإرسال برنامج مشرف آخر.' };
     }
 
-    const items = this.getProgramItems(program.id);
-    if (items.length === 0) {
-      return { success: false, error: 'لا يمكن إرسال برنامج أسبوعي فارغ بدون أنشطة.' };
+    const week = this.getWeekById(program.weekId);
+    if (!week) return { success: false, error: 'الأسبوع المرتبط بالبرنامج غير موجود.' };
+
+    // Check window timing (unless editing was explicitly allowed by Admin)
+    if (!program.editingAllowed) {
+      if (program.planType === 'Planning') {
+        const win = this.isPlanningWindowOpen(week);
+        if (!win.isOpen) {
+          return { success: false, error: win.reason || 'فترة إرسال التخطيط مغلقة.' };
+        }
+      } else {
+        const win = this.isActualWindowOpen(week);
+        if (!win.isOpen) {
+          return { success: false, error: win.reason || 'فترة إرسال البرنامج الفعلي مغلقة.' };
+        }
+      }
     }
 
+    // Check submission count limits
+    const maxSubs = this.getSupervisorMaxSubmissions(week, program.supervisorId, program.planType);
+    const currentSubs = program.submissionCount || 0;
+    if (currentSubs >= maxSubs && !program.editingAllowed) {
+      return {
+        success: false,
+        error: `لقد استنفدت الحد المسموح به من مرات الإرسال (${currentSubs} من ${maxSubs}). يمكنك طلب السماح بالتعديل من المسؤول.`
+      };
+    }
+
+    // Validate completeness of all required days
+    const validation = this.validateProgramBeforeSubmit(program.id, week);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const items = this.getProgramItems(program.id);
     const now = new Date().toISOString();
+    const newSubmissionCount = currentSubs + 1;
+
     program.status = 'Submitted';
     program.submittedAt = now;
     program.updatedAt = now;
+    program.lastModifiedAt = now;
+    program.submissionCount = newSubmissionCount;
+    program.maxSubmissions = maxSubs;
+    program.editingAllowed = false;
+    program.revisionRequested = false;
     this.saveProgram(program);
+
+    // Save submission history
+    const allSubs = this.get<ProgramSubmissionHistory[]>(STORAGE_KEYS.PROGRAM_SUBMISSIONS, []);
+    const subHistory: ProgramSubmissionHistory = {
+      id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      programId: program.id,
+      programType: program.planType,
+      supervisorId: program.supervisorId,
+      weekId: program.weekId,
+      submissionNumber: newSubmissionCount,
+      submittedAt: now,
+      submittedBy: currentUser.fullName,
+      status: 'Submitted',
+      notes: submitNotes || '',
+      itemCount: items.length
+    };
+    allSubs.push(subHistory);
+    this.set(STORAGE_KEYS.PROGRAM_SUBMISSIONS, allSubs);
 
     const sup = this.getSupervisorById(program.supervisorId);
     const supName = sup?.name || currentUser.fullName;
+    const planTypeName = program.planType === 'Planning' ? 'برنامج التخطيط' : 'البرنامج الفعلي';
 
-    // Dispatches notification to admin according to exact prompt requirement:
-    // "تم استلام برنامج أسبوعي جديد من المشرف أحمد محمد."
+    // Dispatches internal notification to admin
     this.addNotification({
       id: `notif_${Date.now()}`,
       userId: 'usr_admin',
-      title: 'برنامج أسبوعي جديد وارد',
-      message: `تم استلام برنامج أسبوعي جديد من المشرف ${supName}.`,
+      title: `${planTypeName} جديد وارد`,
+      message: `تم استلام ${planTypeName} للأسبوع (${week.name}) من المشرف ${supName} (إرسال رقم ${newSubmissionCount} من ${maxSubs}).`,
       type: 'info',
       isRead: false,
       createdAt: now
@@ -1062,13 +1221,218 @@ class StorageService {
     this.addAuditLog(
       currentUser.id,
       currentUser.username,
-      'إرسال برنامج أسبوعي',
+      `إرسال ${planTypeName}`,
       'WeeklyProgram',
       program.id,
-      `تم إرسال البرنامج الأسبوعي من المشرف ${supName} بنجاح (${items.length} نشاط)`
+      `تم إرسال ${planTypeName} من المشرف ${supName} بنجاح للأسبوع ${week.name} (${items.length} نشاط - إرسال ${newSubmissionCount}/${maxSubs})`
     );
 
     return { success: true };
+  }
+
+  // --- Smart Actual Program Generation (Cloning from Planning) ---
+  public getOrCreateActualProgram(supervisorId: string, weekId: string): { program: WeeklyProgram; items: ProgramItem[] } {
+    let actProg = this.getProgramBySupervisorAndWeek(supervisorId, weekId, 'Actual');
+    const week = this.getWeekById(weekId);
+    const currentYear = this.getCurrentAcademicYear();
+
+    if (!actProg) {
+      // Create new Actual program
+      const maxSubs = week ? this.getSupervisorMaxSubmissions(week, supervisorId, 'Actual') : 1;
+      actProg = {
+        id: `prog_act_${supervisorId}_${weekId}`,
+        supervisorId,
+        academicYearId: week?.academicYearId || currentYear?.id || 'year_2026_2027',
+        weekId,
+        planType: 'Actual',
+        status: 'Draft',
+        submissionCount: 0,
+        maxSubmissions: maxSubs,
+        editingAllowed: true,
+        dayNotes: {},
+        createdAt: new Date().toISOString()
+      };
+
+      // Check if Planning Program exists to initialize baseline
+      const planProg = this.getProgramBySupervisorAndWeek(supervisorId, weekId, 'Planning');
+      if (planProg) {
+        const planItems = this.getProgramItems(planProg.id);
+        const clonedItems: ProgramItem[] = [];
+        const allItems = this.get<ProgramItem[]>(STORAGE_KEYS.PROGRAM_ITEMS, []);
+
+        planItems.forEach((pi, idx) => {
+          const newItem: ProgramItem = {
+            id: `item_act_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 4)}`,
+            weeklyProgramId: actProg!.id,
+            schoolId: pi.schoolId,
+            activityId: pi.activityId,
+            plannedSchoolId: pi.schoolId,
+            plannedActivityId: pi.activityId,
+            dayOfWeek: pi.dayOfWeek || pi.dayName,
+            dayDate: pi.dayDate,
+            dayName: pi.dayName || pi.dayOfWeek,
+            notes: pi.notes || '',
+            sortOrder: pi.sortOrder || idx + 1,
+            createdAt: new Date().toISOString()
+          };
+          clonedItems.push(newItem);
+          allItems.push(newItem);
+        });
+
+        if (planProg.dayNotes) {
+          actProg.dayNotes = { ...planProg.dayNotes };
+        }
+
+        this.set(STORAGE_KEYS.PROGRAM_ITEMS, allItems);
+      }
+
+      this.saveProgram(actProg);
+    }
+
+    const items = this.getProgramItems(actProg.id);
+    return { program: actProg, items };
+  }
+
+  // --- Program Revision Requests ---
+  public getRevisionRequests(filterStatus?: string): ProgramRevisionRequest[] {
+    const all = this.get<ProgramRevisionRequest[]>(STORAGE_KEYS.REVISION_REQUESTS, []);
+    if (filterStatus && filterStatus !== 'all') {
+      return all.filter(r => r.status === filterStatus);
+    }
+    return all.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+  }
+
+  public requestProgramRevision(programId: string, supervisor: Supervisor, reason: string): { success: boolean; error?: string } {
+    const program = this.getProgramById(programId);
+    if (!program) return { success: false, error: 'البرنامج غير موجود.' };
+
+    const week = this.getWeekById(program.weekId);
+    const now = new Date().toISOString();
+    const planTypeName = program.planType === 'Planning' ? 'برنامج التخطيط' : 'البرنامج الفعلي';
+
+    const req: ProgramRevisionRequest = {
+      id: `rev_req_${Date.now()}`,
+      programId: program.id,
+      programType: program.planType,
+      supervisorId: supervisor.id,
+      supervisorName: supervisor.name,
+      weekId: program.weekId,
+      weekName: week?.name || 'الأسبوع',
+      requestReason: reason.trim(),
+      status: 'Pending',
+      requestedAt: now
+    };
+
+    const allRequests = this.get<ProgramRevisionRequest[]>(STORAGE_KEYS.REVISION_REQUESTS, []);
+    allRequests.push(req);
+    this.set(STORAGE_KEYS.REVISION_REQUESTS, allRequests);
+
+    program.status = 'RevisionRequested';
+    program.revisionRequested = true;
+    program.revisionReason = reason.trim();
+    program.revisionRequestedAt = now;
+    this.saveProgram(program);
+
+    // Notify Admin
+    this.addNotification({
+      id: `notif_${Date.now()}`,
+      userId: 'usr_admin',
+      title: `طلب تعديل ${planTypeName}`,
+      message: `طلب المشرف ${supervisor.name} السماح بتعديل ${planTypeName} للأسبوع (${week?.name || ''}). السبب: «${reason.trim()}»`,
+      type: 'warning',
+      isRead: false,
+      createdAt: now
+    });
+
+    this.addAuditLog(
+      supervisor.userId,
+      supervisor.name,
+      'طلب تعديل برنامج',
+      'WeeklyProgram',
+      program.id,
+      `طلب المشرف ${supervisor.name} السماح بتعديل ${planTypeName}. السبب: ${reason.trim()}`
+    );
+
+    return { success: true };
+  }
+
+  public respondToRevisionRequest(
+    requestId: string,
+    adminUser: User,
+    action: 'Approve' | 'Reject',
+    responseNotes?: string
+  ): { success: boolean; error?: string } {
+    const allRequests = this.get<ProgramRevisionRequest[]>(STORAGE_KEYS.REVISION_REQUESTS, []);
+    const req = allRequests.find(r => r.id === requestId);
+    if (!req) return { success: false, error: 'طلب التعديل غير موجود.' };
+
+    const now = new Date().toISOString();
+    req.status = action === 'Approve' ? 'Approved' : 'Rejected';
+    req.respondedAt = now;
+    req.respondedBy = adminUser.fullName;
+    req.responseNotes = responseNotes || '';
+    this.set(STORAGE_KEYS.REVISION_REQUESTS, allRequests);
+
+    const program = this.getProgramById(req.programId);
+    if (program) {
+      if (action === 'Approve') {
+        program.status = 'EditingAllowed';
+        program.editingAllowed = true;
+        program.revisionRequested = false;
+        // Increase maxSubmissions so supervisor has room to submit again if limit was reached
+        if (typeof program.maxSubmissions === 'number' && (program.submissionCount || 0) >= program.maxSubmissions) {
+          program.maxSubmissions = (program.submissionCount || 0) + 1;
+        }
+      } else {
+        program.status = 'Submitted';
+        program.editingAllowed = false;
+        program.revisionRequested = false;
+      }
+      this.saveProgram(program);
+    }
+
+    const sup = this.getSupervisorById(req.supervisorId);
+    const planTypeName = req.programType === 'Planning' ? 'برنامج التخطيط' : 'البرنامج الفعلي';
+
+    if (sup) {
+      if (action === 'Approve') {
+        this.addNotification({
+          id: `notif_${Date.now()}`,
+          userId: sup.userId,
+          title: `تمت الموافقة على طلب تعديل ${planTypeName}`,
+          message: `وافق مسؤول النظام على طلبك لتعديل ${planTypeName} لـ (${req.weekName}). يمكنك الآن تعديل بيانات البرنامج وإعادة إرساله.${responseNotes ? ` ملاحظات: ${responseNotes}` : ''}`,
+          type: 'success',
+          isRead: false,
+          createdAt: now
+        });
+      } else {
+        this.addNotification({
+          id: `notif_${Date.now()}`,
+          userId: sup.userId,
+          title: `تم رفض طلب تعديل ${planTypeName}`,
+          message: `عذراً، تم رفض طلب تعديل ${planTypeName} لـ (${req.weekName}).${responseNotes ? ` السبب: ${responseNotes}` : ''}`,
+          type: 'alert',
+          isRead: false,
+          createdAt: now
+        });
+      }
+    }
+
+    this.addAuditLog(
+      adminUser.id,
+      adminUser.username,
+      `الرد على طلب تعديل برنامج (${action})`,
+      'WeeklyProgram',
+      req.programId,
+      `قام المسؤول بـ ${action === 'Approve' ? 'الموافقة على' : 'رفض'} طلب تعديل ${planTypeName} للمشرف ${req.supervisorName}.`
+    );
+
+    return { success: true };
+  }
+
+  public getProgramSubmissions(programId: string): ProgramSubmissionHistory[] {
+    const all = this.get<ProgramSubmissionHistory[]>(STORAGE_KEYS.PROGRAM_SUBMISSIONS, []);
+    return all.filter(s => s.programId === programId).sort((a, b) => b.submissionNumber - a.submissionNumber);
   }
 
   public getProgramBySupervisorAndWeek(supervisorId: string, weekId: string, planType: PlanType = 'Planning'): WeeklyProgram | undefined {
@@ -1250,14 +1614,93 @@ class StorageService {
     const planItems = planProg ? this.getProgramItems(planProg.id) : [];
     const actItems = actProg ? this.getProgramItems(actProg.id) : [];
 
+    const requiredDays = (week?.requiredDays && week.requiredDays.length > 0)
+      ? week.requiredDays
+      : ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+
+    // Map week dates
+    const startDate = week?.startDate ? new Date(week.startDate) : new Date();
+    const daysMap = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+    const comparisonRows = requiredDays.map((dayName, idx) => {
+      // Calculate day date if possible
+      const dayDateObj = new Date(startDate);
+      dayDateObj.setDate(startDate.getDate() + idx);
+      const dayDateStr = dayDateObj.toISOString().split('T')[0];
+
+      const pItemsForDay = planItems.filter(i => (i.dayOfWeek === dayName || i.dayName === dayName));
+      const aItemsForDay = actItems.filter(i => (i.dayOfWeek === dayName || i.dayName === dayName));
+
+      const pSchools = pItemsForDay.map(i => schools.find(s => s.id === i.schoolId)?.name || 'مدرسة').join('، ');
+      const aSchools = aItemsForDay.map(i => schools.find(s => s.id === i.schoolId)?.name || 'مدرسة').join('، ');
+
+      const pActs = pItemsForDay.map(i => activities.find(a => a.id === i.activityId)?.name || 'فعالية').join('، ');
+      const aActs = aItemsForDay.map(i => activities.find(a => a.id === i.activityId)?.name || 'فعالية').join('، ');
+
+      let matchStatus: 'matched' | 'modified' | 'unexecuted' | 'added' | 'empty' = 'matched';
+      let differenceLabel = 'مطابق للتخطيط';
+
+      if (pItemsForDay.length === 0 && aItemsForDay.length === 0) {
+        matchStatus = 'empty';
+        differenceLabel = 'لا يوجد برنامج';
+      } else if (pItemsForDay.length > 0 && aItemsForDay.length === 0) {
+        matchStatus = 'unexecuted';
+        differenceLabel = 'لم يتم التنفيذ';
+      } else if (pItemsForDay.length === 0 && aItemsForDay.length > 0) {
+        matchStatus = 'added';
+        differenceLabel = 'نشاط إضافي غير مخطط';
+      } else {
+        const schoolsMatch = pItemsForDay.length === aItemsForDay.length &&
+          pItemsForDay.every((pi, i) => pi.schoolId === aItemsForDay[i]?.schoolId);
+        const actsMatch = pItemsForDay.length === aItemsForDay.length &&
+          pItemsForDay.every((pi, i) => pi.activityId === aItemsForDay[i]?.activityId);
+
+        if (schoolsMatch && actsMatch) {
+          matchStatus = 'matched';
+          differenceLabel = 'مطابق تماماً';
+        } else {
+          matchStatus = 'modified';
+          if (!schoolsMatch && !actsMatch) {
+            differenceLabel = 'تغيير في المدرسة والفعالية';
+          } else if (!schoolsMatch) {
+            differenceLabel = 'تغيير في المدرسة';
+          } else {
+            differenceLabel = 'تغيير في نوع الفعالية';
+          }
+        }
+      }
+
+      const planNote = (planProg?.dayNotes && planProg.dayNotes[dayName]) || pItemsForDay.map(i => i.notes).filter(Boolean).join(' | ');
+      const actNote = (actProg?.dayNotes && actProg.dayNotes[dayName]) || aItemsForDay.map(i => i.notes).filter(Boolean).join(' | ');
+
+      return {
+        dayName,
+        date: dayDateStr,
+        plannedSchools: pSchools || '-',
+        actualSchools: aSchools || '-',
+        plannedActivities: pActs || '-',
+        actualActivities: aActs || '-',
+        planningItems: pItemsForDay,
+        actualItems: aItemsForDay,
+        matchStatus,
+        differenceLabel,
+        planningNotes: planNote || '-',
+        actualNotes: actNote || '-'
+      };
+    });
+
     const formatItems = (items: ProgramItem[]) =>
       items.map(i => ({
         id: i.id,
         schoolName: schools.find(s => s.id === i.schoolId)?.name || 'مدرسة غير محددة',
         activityName: activities.find(a => a.id === i.activityId)?.name || 'فعالية غير محددة',
-        dayName: i.dayName,
+        dayName: i.dayOfWeek || i.dayName,
+        dayDate: i.dayDate,
         notes: i.notes
       }));
+
+    const matchedDaysCount = comparisonRows.filter(r => r.matchStatus === 'matched').length;
+    const modifiedDaysCount = comparisonRows.filter(r => r.matchStatus === 'modified').length;
 
     return {
       supervisor,
@@ -1265,7 +1708,11 @@ class StorageService {
       planningProgram: planProg,
       planningItems: formatItems(planItems),
       actualProgram: actProg,
-      actualItems: formatItems(actItems)
+      actualItems: formatItems(actItems),
+      comparisonRows,
+      matchedDaysCount,
+      modifiedDaysCount,
+      totalDaysCount: comparisonRows.length
     };
   }
 

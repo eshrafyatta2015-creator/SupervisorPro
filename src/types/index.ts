@@ -66,12 +66,30 @@ export interface Week {
   name: string; // e.g. 'الأسبوع الأول'
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
-  openSubmissionAt?: string; // ISO timestamp
-  closeSubmissionAt?: string; // ISO timestamp
-  allowEditAfterSubmit?: boolean;
-  status: WeekStatus;
+
+  // Required Days for this week (e.g. ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'])
+  requiredDays?: string[];
+
+  // Planning phase settings
   planningOpen: boolean; // مفتوح للإرسال للتخطيط
+  planningOpenAt?: string; // ISO timestamp
+  planningCloseAt?: string; // ISO timestamp
+  defaultMaxPlanningSubmissions?: number; // e.g. 1
+
+  // Actual phase settings
   actualOpen: boolean; // مفتوح للإرسال للبرنامج الفعلي
+  actualOpenAt?: string; // ISO timestamp
+  actualCloseAt?: string; // ISO timestamp
+  defaultMaxActualSubmissions?: number; // e.g. 1
+
+  // Per-supervisor overrides: supervisorId -> { maxPlanning?: number; maxActual?: number }
+  supervisorOverrides?: Record<string, { maxPlanning?: number; maxActual?: number }>;
+
+  openSubmissionAt?: string; // Legacy fallback
+  closeSubmissionAt?: string; // Legacy fallback
+  allowEditAfterSubmit?: boolean;
+  allowRevisionRequests?: boolean;
+  status: WeekStatus;
   isActive: boolean;
   notes?: string;
   createdAt: string;
@@ -99,15 +117,29 @@ export interface Activity {
   createdAt: string;
 }
 
-export type ProgramStatus = 'Draft' | 'Submitted' | 'UnderReview' | 'Approved' | 'NeedsRevision' | 'Closed';
+export type ProgramStatus =
+  | 'Draft'               // مسودة
+  | 'Submitted'           // تم الإرسال
+  | 'UnderReview'         // قيد المراجعة
+  | 'NeedsRevision'       // مطلوب تعديل
+  | 'EditingAllowed'      // مسموح بالتعديل
+  | 'RevisionRequested'   // بانتظار موافقة المسؤول على طلب التعديل
+  | 'Approved'            // معتمد
+  | 'Closed';             // مغلق
 
 export interface ProgramItem {
   id: string;
   weeklyProgramId: string;
   schoolId: string;
   activityId: string;
-  dayDate?: string; // YYYY-MM-DD (optional)
-  dayName?: string; // 'الأحد', 'الإثنين', etc. (optional)
+  dayOfWeek?: string; // 'الأحد', 'الاثنين', etc.
+  dayDate?: string; // YYYY-MM-DD
+  dayName?: string; // Fallback alias
+  
+  // Planned tracking for Actual Program
+  plannedSchoolId?: string;
+  plannedActivityId?: string;
+  
   startTime?: string; // optional
   endTime?: string; // optional
   location?: string;
@@ -125,12 +157,59 @@ export interface WeeklyProgram {
   weekId: string;
   planType: PlanType; // 'Planning' | 'Actual'
   status: ProgramStatus;
+
+  // Submissions tracking
+  submissionCount?: number;
+  maxSubmissions?: number;
   submittedAt?: string;
+  lastModifiedAt?: string;
+
+  // Revision request workflow
+  revisionRequested?: boolean;
+  revisionReason?: string;
+  revisionRequestedAt?: string;
+  editingAllowed?: boolean;
+
+  // Review
   reviewedAt?: string;
   reviewedBy?: string; // Reviewer user id or name
   reviewNotes?: string;
+
+  // Day specific notes: dayOfWeek or date -> note string
+  dayNotes?: Record<string, string>;
+
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface ProgramSubmissionHistory {
+  id: string;
+  programId: string;
+  programType: PlanType;
+  supervisorId: string;
+  weekId: string;
+  submissionNumber: number;
+  submittedAt: string;
+  submittedBy: string;
+  status: ProgramStatus;
+  notes?: string;
+  itemCount: number;
+}
+
+export interface ProgramRevisionRequest {
+  id: string;
+  programId: string;
+  programType: PlanType;
+  supervisorId: string;
+  supervisorName: string;
+  weekId: string;
+  weekName: string;
+  requestReason: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  requestedAt: string;
+  respondedAt?: string;
+  respondedBy?: string;
+  responseNotes?: string;
 }
 
 export interface ProgramReview {
