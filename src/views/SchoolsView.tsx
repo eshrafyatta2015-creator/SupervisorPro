@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Plus, Search, Edit2, School as SchoolIcon, CheckCircle, XCircle, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Edit2, School as SchoolIcon, CheckCircle, XCircle, FileSpreadsheet, Upload } from 'lucide-react';
 import { School, User } from '../types';
 import { storage } from '../services/storage';
 import { Modal } from '../components/Modal';
+import { ImportModal } from '../components/ImportModal';
 import { formatDate } from '../utils/date';
 import { arabicSearchMatch } from '../utils/arabic';
 import { exportToExcel } from '../utils/export';
@@ -16,6 +17,8 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStage, setFilterStage] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [showAddEditModal, setShowAddEditModal] = useState(false);
   const [editingSchool, setEditingSchool] = useState<School | null>(null);
@@ -29,7 +32,7 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
 
-  const schools = storage.getSchools();
+  const schools = storage.getSchools(); // re-evaluates when refreshKey changes
 
   const handleOpenAdd = () => {
     setEditingSchool(null);
@@ -122,15 +125,23 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
           <button
             type="button"
             onClick={handleExportExcel}
-            className="px-3.5 py-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl flex items-center gap-1.5"
+            className="px-3 py-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
             <span>تصدير Excel</span>
           </button>
           <button
             type="button"
+            onClick={() => setShowImportModal(true)}
+            className="px-3.5 py-2 text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+          >
+            <Upload className="w-4 h-4 text-emerald-700" />
+            <span>استيراد المدارس</span>
+          </button>
+          <button
+            type="button"
             onClick={handleOpenAdd}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>إضافة مدرسة جديدة</span>
@@ -196,7 +207,36 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSchools.map(sch => (
+              {filteredSchools.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <SchoolIcon className="w-10 h-10 mx-auto mb-2 text-slate-300 stroke-[1.5]" />
+                    <p className="font-bold text-slate-700 text-sm">لا توجد مدارس مسجلة مطابقة للبحث</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      يمكنك استيراد قائمة المدارس دفعة واحدة من ملف Excel أو إضافة مدرسة جديدة يدوياً.
+                    </p>
+                    <div className="flex items-center justify-center gap-2 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowImportModal(true)}
+                        className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>استيراد من ملف Excel</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenAdd}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>إضافة مدرسة جديدة</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredSchools.map(sch => (
                 <tr key={sch.id} className="hover:bg-slate-50/70 transition-colors">
                   <td className="py-3 px-4 font-bold text-slate-900">{sch.name}</td>
                   <td className="py-3 px-4 text-slate-600">{sch.region}</td>
@@ -239,7 +279,7 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
                     </div>
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
@@ -355,6 +395,15 @@ export const SchoolsView: React.FC<SchoolsViewProps> = ({ currentUser, onShowToa
           </div>
         </form>
       </Modal>
+
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        type="schools"
+        onSuccess={() => setRefreshKey(k => k + 1)}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

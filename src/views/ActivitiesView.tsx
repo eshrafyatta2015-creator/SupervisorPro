@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Activity as ActivityIcon, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit2, Activity as ActivityIcon, CheckCircle, XCircle, Upload, FileSpreadsheet } from 'lucide-react';
 import { Activity, User } from '../types';
 import { storage } from '../services/storage';
 import { Modal } from '../components/Modal';
+import { ImportModal } from '../components/ImportModal';
+import { exportToExcel } from '../utils/export';
 
 interface ActivitiesViewProps {
   currentUser: User;
@@ -11,6 +13,8 @@ interface ActivitiesViewProps {
 
 export const ActivitiesView: React.FC<ActivitiesViewProps> = ({ currentUser, onShowToast }) => {
   const [showAddEditModal, setShowAddEditModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
 
   // Form states
@@ -21,7 +25,7 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({ currentUser, onS
   const [color, setColor] = useState('emerald');
   const [formError, setFormError] = useState('');
 
-  const activities = storage.getActivities();
+  const activities = storage.getActivities(); // re-evaluates on refreshKey change
 
   const handleOpenAdd = () => {
     setEditingActivity(null);
@@ -73,6 +77,18 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({ currentUser, onS
     onShowToast(`تم ${act.isActive ? 'تفعيل' : 'تعطيل'} نوع النشاط (${act.name}).`, 'info');
   };
 
+  const handleExportExcel = () => {
+    const headers = ['اسم النشاط أو الفعالية', 'الرمز', 'الوصف', 'الحالة', 'اللون'];
+    const rows = activities.map(a => [
+      a.name,
+      a.code || '-',
+      a.description || '-',
+      a.isActive ? 'مفعل' : 'معطل',
+      a.color || 'emerald'
+    ]);
+    exportToExcel('أنشطة_وفعاليات_الإشراف_التربوي', headers, rows);
+  };
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -80,71 +96,117 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({ currentUser, onS
         <div>
           <h1 className="text-xl font-black text-slate-900">إدارة أنواع الأنشطة والمهام الإشرافية</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            تصنيف الأنشطة الرسمية المتاحة للمشرفين التربويين في برامجهم الأسبوعية.
+            تصنيف الأنشطة والفعاليات المتاحة للمشرفين التربويين في برامجهم الأسبوعية.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenAdd}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>إضافة نوع نشاط جديد</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="px-3 py-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+            <span>تصدير Excel</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowImportModal(true)}
+            className="px-3.5 py-2 text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+          >
+            <Upload className="w-4 h-4 text-purple-700" />
+            <span>استيراد الفعاليات</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>إضافة نوع نشاط جديد</span>
+          </button>
+        </div>
       </div>
 
       {/* Activities Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {activities.map(act => (
-          <div
-            key={act.id}
-            className={`p-4 rounded-2xl border transition-all ${
-              act.isActive
-                ? 'bg-white border-slate-200 shadow-xs'
-                : 'bg-slate-50 border-slate-200/60 opacity-60'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">{act.name}</h3>
-                <span className="text-[10px] font-mono text-slate-400 mt-0.5 block">{act.code}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleOpenEdit(act)}
-                  className="p-1.5 text-slate-400 hover:text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
-                  title="تعديل"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleToggleActive(act)}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    act.isActive ? 'text-rose-400 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'
-                  }`}
-                  title={act.isActive ? 'تعطيل النشاط' : 'تفعيل النشاط'}
-                >
-                  {act.isActive ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-500 mt-2 min-h-[32px] leading-relaxed">
-              {act.description || 'لا يوجد وصف تفصيلي لهذا النشاط.'}
-            </p>
-
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-400">الحالة:</span>
-              <span className={`font-bold ${act.isActive ? 'text-emerald-700' : 'text-slate-400'}`}>
-                {act.isActive ? 'مفعل في القوائم' : 'معطل مؤقتاً'}
-              </span>
-            </div>
+      {activities.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 shadow-xs">
+          <ActivityIcon className="w-12 h-12 mx-auto mb-3 text-slate-300 stroke-[1.5]" />
+          <h3 className="font-bold text-slate-700 text-base">لا توجد فعاليات أو أنشطة مضافة حالياً</h3>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            يمكنك استيراد قائمة الفعاليات والأنشطة الإشرافية من ملف Excel أو إضافة نشاط جديد يدوياً.
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-5">
+            <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs font-bold rounded-xl border border-purple-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Upload className="w-4 h-4 text-purple-700" />
+              <span>استيراد من ملف Excel</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة نشاط يدوياً</span>
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activities.map(act => (
+            <div
+              key={act.id}
+              className={`p-4 rounded-2xl border transition-all ${
+                act.isActive
+                  ? 'bg-white border-slate-200 shadow-xs'
+                  : 'bg-slate-50 border-slate-200/60 opacity-60'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">{act.name}</h3>
+                  <span className="text-[10px] font-mono text-slate-400 mt-0.5 block">{act.code}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(act)}
+                    className="p-1.5 text-slate-400 hover:text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                    title="تعديل"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(act)}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      act.isActive ? 'text-rose-400 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'
+                    }`}
+                    title={act.isActive ? 'تعطيل النشاط' : 'تفعيل النشاط'}
+                  >
+                    {act.isActive ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 mt-2 min-h-[32px] leading-relaxed">
+                {act.description || 'لا يوجد وصف تفصيلي لهذا النشاط.'}
+              </p>
+
+              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">الحالة:</span>
+                <span className={`font-bold ${act.isActive ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {act.isActive ? 'مفعل في القوائم' : 'معطل مؤقتاً'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       <Modal
@@ -216,6 +278,15 @@ export const ActivitiesView: React.FC<ActivitiesViewProps> = ({ currentUser, onS
           </div>
         </form>
       </Modal>
+
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        type="activities"
+        onSuccess={() => setRefreshKey(k => k + 1)}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

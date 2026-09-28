@@ -10,11 +10,13 @@ import {
   FileSpreadsheet,
   KeyRound,
   History,
-  UserX
+  UserX,
+  Upload
 } from 'lucide-react';
 import { Supervisor, User } from '../types';
 import { storage } from '../services/storage';
 import { Modal } from '../components/Modal';
+import { ImportModal } from '../components/ImportModal';
 import { formatDate } from '../utils/date';
 import { arabicSearchMatch } from '../utils/arabic';
 import { exportToExcel } from '../utils/export';
@@ -28,6 +30,8 @@ interface SupervisorsViewProps {
 export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, onShowToast, onNavigate }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddEditModal, setShowAddEditModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [editingSupervisor, setEditingSupervisor] = useState<Supervisor | null>(null);
 
   // Form states
@@ -51,7 +55,7 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
   const [showProgramsModal, setShowProgramsModal] = useState(false);
   const [targetSupervisor, setTargetSupervisor] = useState<Supervisor | null>(null);
 
-  const supervisors = storage.getSupervisors();
+  const supervisors = storage.getSupervisors(); // re-evaluates when refreshKey changes
   const users = storage.getUsers();
   const weeks = storage.getWeeks();
   const allPrograms = storage.getWeeklyPrograms();
@@ -202,15 +206,23 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
           <button
             type="button"
             onClick={handleExportExcel}
-            className="px-3.5 py-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl flex items-center gap-1.5"
+            className="px-3 py-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
             <span>تصدير Excel</span>
           </button>
           <button
             type="button"
+            onClick={() => setShowImportModal(true)}
+            className="px-3.5 py-2 text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+          >
+            <Upload className="w-4 h-4 text-emerald-700" />
+            <span>استيراد المشرفين</span>
+          </button>
+          <button
+            type="button"
             onClick={handleOpenAdd}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>إضافة مشرف جديد</span>
@@ -255,8 +267,26 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
                     <UserX className="w-10 h-10 mx-auto mb-2 text-slate-300 stroke-[1.5]" />
                     <p className="font-bold text-slate-700 text-sm">قاعدة البيانات فارغة من المشرفين حالياً</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                      يمكنك البدء بإضافة المشرفين التربويين وتحديد تخصصاتهم بالضغط على زر "إضافة مشرف جديد" بالأعلى.
+                      يمكنك البدء بإضافة المشرفين التربويين وتحديد تخصصاتهم يدوياً أو استيرادهم دفعة واحدة من ملف Excel.
                     </p>
+                    <div className="flex items-center justify-center gap-2 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowImportModal(true)}
+                        className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>استيراد من ملف Excel</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenAdd}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>إضافة مشرف جديد</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -577,6 +607,15 @@ export const SupervisorsView: React.FC<SupervisorsViewProps> = ({ currentUser, o
           </div>
         </div>
       </Modal>
+
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        type="supervisors"
+        onSuccess={() => setRefreshKey(k => k + 1)}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

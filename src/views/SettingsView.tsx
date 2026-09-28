@@ -9,10 +9,15 @@ import {
   Building,
   Shield,
   FileCode,
-  CheckCircle2
+  CheckCircle2,
+  FileSpreadsheet,
+  Users,
+  GraduationCap,
+  Sparkles
 } from 'lucide-react';
 import { SystemSettings, User } from '../types';
 import { storage } from '../services/storage';
+import { ImportModal, ImportType } from '../components/ImportModal';
 
 interface SettingsViewProps {
   currentUser: User;
@@ -23,6 +28,7 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onShowToast, onRefreshData }) => {
   const [settings, setSettings] = useState<SystemSettings>(storage.getSystemSettings());
   const [isSaving, setIsSaving] = useState(false);
+  const [activeImportType, setActiveImportType] = useState<ImportType | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const academicYears = storage.getAcademicYears();
@@ -248,6 +254,56 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onShowT
 
         {/* Backup & Restore Panel */}
         <div className="space-y-4">
+          {/* Excel Import Hub */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex items-center gap-2 pb-3 mb-4 border-b border-slate-100 text-slate-900 font-bold text-sm">
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>مركز الاستيراد من ملفات Excel و CSV</span>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed mb-4">
+              استيراد وتحديث البيانات الأساسية للنظام مباشرة من جداول البيانات وقوالب إكسل المعتمدة:
+            </p>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => setActiveImportType('supervisors')}
+                className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-700" />
+                  <span>استيراد المشرفين التربويين</span>
+                </span>
+                <Upload className="w-3.5 h-3.5 text-emerald-600" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveImportType('schools')}
+                className="w-full py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-bold rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <GraduationCap className="w-4 h-4 text-blue-700" />
+                  <span>استيراد المدارس والمؤسسات</span>
+                </span>
+                <Upload className="w-3.5 h-3.5 text-blue-600" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveImportType('activities')}
+                className="w-full py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 text-xs font-bold rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-700" />
+                  <span>استيراد أنواع الفعاليات والأنشطة</span>
+                </span>
+                <Upload className="w-3.5 h-3.5 text-purple-600" />
+              </button>
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
             <div className="flex items-center gap-2 pb-3 mb-4 border-b border-slate-100 text-slate-900 font-bold text-sm">
               <Database className="w-4 h-4 text-emerald-600" />
@@ -317,6 +373,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onShowT
           </div>
         </div>
       </div>
+
+      {/* Import Modal */}
+      {activeImportType && (
+        <ImportModal
+          isOpen={true}
+          onClose={() => setActiveImportType(null)}
+          type={activeImportType}
+          onSuccess={() => {
+            if (onRefreshData) onRefreshData();
+          }}
+          onShowToast={onShowToast}
+        />
+      )}
     </div>
   );
 };

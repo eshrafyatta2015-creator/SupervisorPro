@@ -772,6 +772,88 @@ class StorageService {
     this.addAuditLog('ADMIN', 'admin', 'حفظ مدرسة', 'School', school.id, `المدرسة: ${school.name}`);
   }
 
+  public importSchoolsBatch(
+    items: Array<{
+      name: string;
+      region?: string;
+      stage?: string;
+      type?: string;
+      notes?: string;
+    }>,
+    mode: 'append' | 'replace' = 'append'
+  ): { importedCount: number; errors: string[] } {
+    const errors: string[] = [];
+    let currentSchools = mode === 'replace' ? [] : this.getSchools();
+    let successCount = 0;
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const rowNum = i + 1;
+
+      if (!item.name || !item.name.trim()) {
+        errors.push(`السطر ${rowNum}: اسم المدرسة مطلوب وتم تجاوزه.`);
+        continue;
+      }
+
+      const cleanName = item.name.trim();
+      const cleanRegion = (item.region || '').trim() || 'يطا';
+      
+      // Normalize stage: 'أساسي' | 'ثانوي' | 'مختلط'
+      let cleanStage: 'أساسي' | 'ثانوي' | 'مختلط' = 'أساسي';
+      const stageStr = (item.stage || '').trim();
+      if (stageStr.includes('ثانوي')) cleanStage = 'ثانوي';
+      else if (stageStr.includes('مختلط')) cleanStage = 'مختلط';
+      else if (stageStr.includes('أساس')) cleanStage = 'أساسي';
+
+      // Normalize type: 'ذكور' | 'إناث' | 'مختلط'
+      let cleanType: 'ذكور' | 'إناث' | 'مختلط' = 'ذكور';
+      const typeStr = (item.type || '').trim();
+      if (typeStr.includes('إناث') || typeStr.includes('بنات')) cleanType = 'إناث';
+      else if (typeStr.includes('مختلط')) cleanType = 'مختلط';
+      else if (typeStr.includes('ذكور') || typeStr.includes('بنين')) cleanType = 'ذكور';
+
+      const cleanNotes = (item.notes || '').trim();
+
+      const existingIndex = currentSchools.findIndex(
+        s => s.name.toLowerCase().trim() === cleanName.toLowerCase()
+      );
+
+      if (existingIndex >= 0) {
+        currentSchools[existingIndex].region = cleanRegion;
+        currentSchools[existingIndex].stage = cleanStage;
+        currentSchools[existingIndex].type = cleanType;
+        if (cleanNotes) currentSchools[existingIndex].notes = cleanNotes;
+        successCount++;
+      } else {
+        const newSchool: School = {
+          id: `sch_${Date.now()}_${i}`,
+          name: cleanName,
+          region: cleanRegion,
+          stage: cleanStage,
+          type: cleanType,
+          isActive: true,
+          notes: cleanNotes,
+          createdAt: now
+        };
+        currentSchools.push(newSchool);
+        successCount++;
+      }
+    }
+
+    this.set(STORAGE_KEYS.SCHOOLS, currentSchools);
+    this.addAuditLog(
+      'ADMIN',
+      'admin',
+      'استيراد مدارس',
+      'School',
+      'batch',
+      `تم استيراد ${successCount} مدرسة بنجاح (الوضع: ${mode === 'replace' ? 'استبدال' : 'إضافة'}).`
+    );
+
+    return { importedCount: successCount, errors };
+  }
+
   // --- Activities ---
   public getActivities(): Activity[] {
     return this.get<Activity[]>(STORAGE_KEYS.ACTIVITIES, []);
@@ -791,6 +873,78 @@ class StorageService {
     }
     this.set(STORAGE_KEYS.ACTIVITIES, activities);
     this.addAuditLog('ADMIN', 'admin', 'حفظ نشاط', 'Activity', activity.id, `النشاط: ${activity.name}`);
+  }
+
+  public importActivitiesBatch(
+    items: Array<{
+      name: string;
+      code?: string;
+      description?: string;
+      color?: string;
+    }>,
+    mode: 'append' | 'replace' = 'append'
+  ): { importedCount: number; errors: string[] } {
+    const errors: string[] = [];
+    let currentActivities = mode === 'replace' ? [] : this.getActivities();
+    let successCount = 0;
+    const now = new Date().toISOString();
+
+    const allowedColors = ['emerald', 'blue', 'amber', 'purple', 'rose', 'sky', 'indigo', 'teal', 'slate'];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const rowNum = i + 1;
+
+      if (!item.name || !item.name.trim()) {
+        errors.push(`السطر ${rowNum}: اسم الفعالية/النشاط مطلوب وتم تجاوزه.`);
+        continue;
+      }
+
+      const cleanName = item.name.trim();
+      const cleanCode = (item.code || '').trim().toUpperCase() || `ACT_${(i + 1).toString().padStart(3, '0')}`;
+      const cleanDesc = (item.description || '').trim();
+      
+      let cleanColor = (item.color || '').trim().toLowerCase();
+      if (!allowedColors.includes(cleanColor)) {
+        cleanColor = allowedColors[i % allowedColors.length];
+      }
+
+      const existingIndex = currentActivities.findIndex(
+        a => a.name.toLowerCase().trim() === cleanName.toLowerCase() || (a.code && a.code === cleanCode)
+      );
+
+      if (existingIndex >= 0) {
+        currentActivities[existingIndex].name = cleanName;
+        currentActivities[existingIndex].code = cleanCode;
+        if (cleanDesc) currentActivities[existingIndex].description = cleanDesc;
+        if (cleanColor) currentActivities[existingIndex].color = cleanColor;
+        successCount++;
+      } else {
+        const newAct: Activity = {
+          id: `act_${Date.now()}_${i}`,
+          name: cleanName,
+          code: cleanCode,
+          description: cleanDesc,
+          isActive: true,
+          color: cleanColor,
+          createdAt: now
+        };
+        currentActivities.push(newAct);
+        successCount++;
+      }
+    }
+
+    this.set(STORAGE_KEYS.ACTIVITIES, currentActivities);
+    this.addAuditLog(
+      'ADMIN',
+      'admin',
+      'استيراد فعاليات وأنشطة',
+      'Activity',
+      'batch',
+      `تم استيراد ${successCount} نشاط بنجاح (الوضع: ${mode === 'replace' ? 'استبدال' : 'إضافة'}).`
+    );
+
+    return { importedCount: successCount, errors };
   }
 
   // --- Weekly Programs & Items ---
