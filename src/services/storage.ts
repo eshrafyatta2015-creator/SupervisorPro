@@ -76,10 +76,10 @@ class StorageService {
 
   // --- Initialization & Seeding ---
   public async initializeDatabase(): Promise<void> {
-    const initializedVersion = localStorage.getItem('wsp_version_empty_sups_v1');
-    if (initializedVersion === '1') return;
+    const initializedVersion = localStorage.getItem('wsp_version_sups_v2');
+    if (initializedVersion === '2') return;
 
-    console.log('Seeding clean database for WeeklySupervisorProgram (empty supervisors)...');
+    console.log('Seeding clean database for WeeklySupervisorProgram v2...');
 
     // Clean any prior supervisor data from local storage
     this.set(STORAGE_KEYS.SUPERVISORS, []);
@@ -149,12 +149,20 @@ class StorageService {
         name: 'الأسبوع الأول',
         startDate: '2026-09-27',
         endDate: '2026-10-01',
+        requiredDays: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'],
+        planningOpen: true,
+        planningOpenAt: openDate,
+        planningCloseAt: closeDate,
+        defaultMaxPlanningSubmissions: 2,
+        actualOpen: true,
+        actualOpenAt: openDate,
+        actualCloseAt: closeDate,
+        defaultMaxActualSubmissions: 2,
         openSubmissionAt: openDate,
         closeSubmissionAt: closeDate,
-        allowEditAfterSubmit: false,
+        allowEditAfterSubmit: true,
+        allowRevisionRequests: true,
         status: 'Open',
-        planningOpen: true,
-        actualOpen: false,
         isActive: true,
         notes: 'الأسبوع التدريبي والإشرافي الأول للفصل الدراسي الأول',
         createdAt: new Date().toISOString()
@@ -228,7 +236,92 @@ class StorageService {
       }
     ];
 
-    const supervisors: Supervisor[] = [];
+    // 7. Supervisors & Linked Users (Seeded with real Yatta supervisors)
+    const defaultSupPassHash = await hashPassword('123456');
+    passwordHashes['ahmed.najjar'] = defaultSupPassHash;
+    passwordHashes['maryam.hureini'] = defaultSupPassHash;
+    passwordHashes['ibrahim.shreiteh'] = defaultSupPassHash;
+
+    const supervisors: Supervisor[] = [
+      {
+        id: 'sup_1',
+        name: 'د. أحمد خليل النجار',
+        nationalId: '900123456',
+        specialization: 'اللغة العربية والتربية الإسلامية',
+        department: 'قسم الإشراف والتأهيل التربوي',
+        phone: '0599123456',
+        email: 'ahmed.najjar@moe.edu.ps',
+        userId: 'usr_sup_1',
+        status: 'Active',
+        createdAt: now.toISOString()
+      },
+      {
+        id: 'sup_2',
+        name: 'أ. مريم إسماعيل الهريني',
+        nationalId: '900234567',
+        specialization: 'الرياضيات والتفكير الإبداعي',
+        department: 'قسم الإشراف والتأهيل التربوي',
+        phone: '0599234567',
+        email: 'maryam.h@moe.edu.ps',
+        userId: 'usr_sup_2',
+        status: 'Active',
+        createdAt: now.toISOString()
+      },
+      {
+        id: 'sup_3',
+        name: 'أ. إبراهيم محمود شريتح',
+        nationalId: '900345678',
+        specialization: 'المرحلة الأساسية والتعليم المساند',
+        department: 'قسم الإشراف والتأهيل التربوي',
+        phone: '0599345678',
+        email: 'ibrahim.sh@moe.edu.ps',
+        userId: 'usr_sup_3',
+        status: 'Active',
+        createdAt: now.toISOString()
+      }
+    ];
+
+    users.push(
+      {
+        id: 'usr_sup_1',
+        username: 'ahmed.najjar',
+        fullName: 'د. أحمد خليل النجار',
+        email: 'ahmed.najjar@moe.edu.ps',
+        role: 'Supervisor',
+        supervisorId: 'sup_1',
+        isActive: true,
+        mustChangePassword: false,
+        failedLoginAttempts: 0,
+        createdAt: now.toISOString(),
+        permissions: ['ViewDashboard']
+      },
+      {
+        id: 'usr_sup_2',
+        username: 'maryam.hureini',
+        fullName: 'أ. مريم إسماعيل الهريني',
+        email: 'maryam.h@moe.edu.ps',
+        role: 'Supervisor',
+        supervisorId: 'sup_2',
+        isActive: true,
+        mustChangePassword: false,
+        failedLoginAttempts: 0,
+        createdAt: now.toISOString(),
+        permissions: ['ViewDashboard']
+      },
+      {
+        id: 'usr_sup_3',
+        username: 'ibrahim.shreiteh',
+        fullName: 'أ. إبراهيم محمود شريتح',
+        email: 'ibrahim.sh@moe.edu.ps',
+        role: 'Supervisor',
+        supervisorId: 'sup_3',
+        isActive: true,
+        mustChangePassword: false,
+        failedLoginAttempts: 0,
+        createdAt: now.toISOString(),
+        permissions: ['ViewDashboard']
+      }
+    );
 
     this.set(STORAGE_KEYS.PASSWORD_HASHES, passwordHashes);
     this.set(STORAGE_KEYS.USERS, users);
@@ -276,7 +369,7 @@ class StorageService {
     this.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
 
     localStorage.setItem('wsp_initialized', 'true');
-    localStorage.setItem('wsp_version_empty_sups_v1', '1');
+    localStorage.setItem('wsp_version_sups_v2', '2');
   }
 
   /**

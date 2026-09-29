@@ -65,11 +65,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const supervisorNavItems: NavItem[] = [
-    { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
-    { id: 'my-program', label: 'برنامجي الأسبوعي', icon: Calendar },
-    { id: 'previous-programs', label: 'البرامج السابقة', icon: History },
+    { id: 'my-program', label: 'برنامج الأسبوع', icon: Calendar },
+    { id: 'previous-programs', label: 'أرشيف البرامج السابقة', icon: History },
     { id: 'notifications', label: 'الإشعارات والتنبيهات', icon: Bell },
-    { id: 'profile', label: 'الملف الشخصي وتغيير المرور', icon: UserCheck }
+    { id: 'dashboard', label: 'لوحة الإحصائيات العامة', icon: LayoutDashboard },
+    { id: 'profile', label: 'الملف الشخصي وكلمة المرور', icon: UserCheck }
   ];
 
   const navItems = isAdmin ? adminNavItems : supervisorNavItems;

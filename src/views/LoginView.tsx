@@ -319,6 +319,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 const firstSup = activeSupervisors[0];
                 if (firstSup) {
                   handleQuickFill(firstSup.user.id, '123456');
+                } else {
+                  handleQuickFill('usr_sup_1', '123456');
                 }
               }}
               className={`p-2.5 text-right rounded-xl border transition-colors ${
@@ -329,7 +331,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             >
               <div className="font-bold text-slate-900 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                <span>{activeSupervisors[0]?.supervisor.name || 'أحمد محمد'}</span>
+                <span>{activeSupervisors[0]?.supervisor.name || 'د. أحمد خليل النجار'}</span>
               </div>
               <div className="text-[10px] text-slate-500 font-mono mt-0.5">123456</div>
             </button>

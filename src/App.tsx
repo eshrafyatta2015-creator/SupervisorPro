@@ -35,6 +35,7 @@ export default function App() {
       const sessionUser = storage.getCurrentUser();
       if (sessionUser) {
         setCurrentUser(sessionUser);
+        setActiveView(sessionUser.role === 'Supervisor' ? 'my-program' : 'dashboard');
       }
       setIsReady(true);
     };
@@ -56,7 +57,7 @@ export default function App() {
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    setActiveView('dashboard');
+    setActiveView(user.role === 'Supervisor' ? 'my-program' : 'dashboard');
     showToast(`مرحباً بك، ${user.fullName}`, 'success');
   };
 
@@ -69,7 +70,7 @@ export default function App() {
 
   const handleUserSwitched = (user: User) => {
     setCurrentUser(user);
-    setActiveView('dashboard');
+    setActiveView(user.role === 'Supervisor' ? 'my-program' : 'dashboard');
     showToast(`تم التبديل إلى المستخدم: ${user.fullName}`, 'success');
   };
 
@@ -192,9 +193,10 @@ export default function App() {
                   />
                 )}
 
-                {(activeView === 'my-program' || activeView === 'previous-programs') && (
+                {(activeView === 'my-program' || activeView === 'previous-programs' || activeView === 'planning-program' || activeView === 'actual-program') && (
                   <WeeklyProgramView
                     currentUser={currentUser}
+                    initialPlanType={activeView === 'actual-program' ? 'Actual' : 'Planning'}
                     onShowToast={showToast}
                   />
                 )}
